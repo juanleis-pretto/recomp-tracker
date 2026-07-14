@@ -41,7 +41,7 @@ async function doLogin(){
 Object.assign(window, {
   go, render, doLogin,
   shiftDay:V.shiftDay, setDate:V.setDate, dismiss:V.dismiss,
-  pickLabel:V.pickLabel, tapMeal:V.tapMeal, addCustom:V.addCustom, delMeal:V.delMeal,
+  pickLabel:V.pickLabel, addCustom:V.addCustom, delMeal:V.delMeal,
   selEx:V.selEx, addSet:V.addSet, startNewWorkout:V.startNewWorkout, delLastSet:V.delLastSet,
   saveRun:V.saveRun, toggleDone:V.toggleDone, saveBody:V.saveBody,
   pickLift:V.pickLift,

@@ -42,12 +42,6 @@ function foodCard(d){
   const T = CFG.targets;
   const pLeft = Math.max(0, T.protein - t.protein);
   const isCheat = dow(d)===CFG.cheatDay;
-  const chips = CFG.mealTemplates.map(m=>{
-    const logged = meals.some(x=>x.tid===m.id);
-    return `<button class="mealbtn ${logged?'logged':''}" onclick="tapMeal('${m.id}')">
-      <div class="mn">${logged?"✓ ":""}${esc(m.name.split(" — ")[0])}</div>
-      <div class="mm">${esc(m.detail)} · ${m.cal} cal / ${m.protein}g</div></button>`;
-  }).join("");
   const lblChips = MEAL_LABELS.map(l=>`<button class="${l===S.mealLabel?'on':''}"
     onclick="pickLabel('${l}',this)">${l}</button>`).join("");
   const list = meals.map((m,i)=>`<div class="li"><div>${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${m.cal} cal · ${m.protein}g protein</div></div>
@@ -55,8 +49,7 @@ function foodCard(d){
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
-    <div class="mealgrid">${chips}</div>
-    <h3>Add meal</h3>
+    <h3 style="margin-top:2px">Add meal</h3>
     <div class="seg" id="lblseg">${lblChips}</div>
     <div class="row"><input id="cmName" placeholder="What was it? (e.g. chipotle bowl)"></div>
     <div class="row" style="margin-top:8px">
@@ -72,14 +65,6 @@ function foodCard(d){
   </div>`;
 }
 export function pickLabel(l, el){ S.mealLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
-export function tapMeal(tid){
-  const d=S.selDate; const meals=DB.meals[d]=DB.meals[d]||[];
-  const i=meals.findIndex(m=>m.tid===tid);
-  if(i>=0){ meals.splice(i,1); }
-  else { const m=CFG.mealTemplates.find(x=>x.id===tid);
-    meals.push({tid, label:m.name.split(" — ")[0], name:m.detail, cal:m.cal, protein:m.protein}); }
-  Store.save(); render();
-}
 export function addCustom(){
   const n=document.getElementById("cmName").value.trim();
   const c=+document.getElementById("cmCal").value, p=+document.getElementById("cmPro").value||0;
