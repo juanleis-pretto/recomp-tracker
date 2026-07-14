@@ -1,6 +1,6 @@
 # Recomp Tracker — deploy
 
-Static single-file app + Supabase (auth + Postgres). ~10 minutes total.
+Static app (plain ES modules, no build step) + Supabase (auth + Postgres). ~10 minutes total.
 
 ## 1. Supabase (free tier)
 
@@ -12,16 +12,16 @@ Static single-file app + Supabase (auth + Postgres). ~10 minutes total.
 
 ## 2. Configure the app
 
-In `index.html`, near the top of the `<script>`, fill in:
+In `js/config.js`, fill in:
 
 ```js
-const SUPA = {
+export const SUPA = {
   url: "https://YOURREF.supabase.co",
   anonKey: "eyJ...",
 };
 ```
 
-Leave both empty and the app runs in local-only mode (what you had before).
+Leave both empty and the app runs in local-only mode.
 
 ## 3. Deploy to Vercel
 
@@ -44,6 +44,22 @@ Open the Vercel URL in Safari → sign in → Share → **Add to Home Screen**. 
 - On launch: server copy wins unless local has unsynced changes, in which case local wins (single-user last-write-wins; don't log on two devices simultaneously and it'll never bite you).
 - Export tab: JSON backup/restore still there, plus "Export to Claude".
 
+## Structure
+
+```
+index.html      markup + login gate
+styles.css      theme
+js/config.js    CFG (targets, meals, split, exercises) + SUPA keys — edit the program here
+js/util.js      date/format helpers, Epley
+js/store.js     persistence: localStorage cache + Supabase sync, v1→v2 migration
+js/data.js      domain logic: totals, workout blocks, progression detection
+js/charts.js    dependency-free SVG line/bar charts
+js/views.js     all screens + user actions
+js/app.js       tabs, render loop, window bindings, boot
+```
+
+Workout model: `workouts[date]` is an array of **blocks** (a workout). A set logged within 2h (`CFG.workoutWindowMs`) of the day's last activity joins the current workout; a longer gap — or the "start a new workout" link — begins a new one. Sets bundle per exercise within a block regardless of order.
+
 ## Changing the program
 
-Targets, meal templates, split, exercises and rep ranges are all in the `CFG` object at the top of the script in `index.html`. Edit, redeploy (`npx vercel --prod`).
+Edit `CFG` in `js/config.js`, push to `main` (auto-deploys) or `npx vercel --prod`.
