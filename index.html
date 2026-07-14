@@ -62,7 +62,7 @@ label.fl{display:block;font-size:12px;color:var(--dim);margin:8px 0 3px;}
 .mealbtn.logged .mm{color:var(--good);}
 .loggedlist{margin-top:10px;}
 .li{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:14px;}
-.li .sub{color:var(--dim);font-size:12px;}
+.sub{color:var(--dim);font-size:12px;}
 .del{background:none;border:none;color:var(--faint);font-size:17px;padding:4px 8px;}
 /* totals bars */
 .tot{margin-top:12px;}
@@ -303,11 +303,15 @@ function readyToProgress(name){
 
 /* ================= APP SHELL ================= */
 const TABS = [
-  { id:"today",  label:"Today",  ic:"☰" },
-  { id:"lifts",  label:"Lifts",  ic:"⚒" },
-  { id:"trends", label:"Trends", ic:"📈" },
-  { id:"export", label:"Export", ic:"⇪" },
+  { id:"today",   label:"Log",     ic:"☰" },
+  { id:"history", label:"History", ic:"🗓" },
+  { id:"lifts",   label:"Lifts",   ic:"⚒" },
+  { id:"trends",  label:"Trends",  ic:"📈" },
+  { id:"export",  label:"Export",  ic:"⇪" },
 ];
+let selDate = today();
+function shiftDay(n){ const d=parseD(selDate); d.setDate(d.getDate()+n); const s=dstr(d); if(s<=today()){ selDate=s; addExSel=""; } render(); }
+function setDate(v){ if(v && v<=today()){ selDate=v; addExSel=""; render(); } }
 let tab = "today";
 function nav(){
   document.getElementById("nav").innerHTML = TABS.map(t=>
@@ -316,20 +320,26 @@ function nav(){
 function go(t){ tab=t; render(); window.scrollTo(0,0); }
 function render(){
   nav();
-  const titles={today:"Today",lifts:"Lift progression",trends:"Trends",export:"Export"};
+  const titles={today:"Log",history:"History",lifts:"Lift progression",trends:"Trends",export:"Export"};
   document.getElementById("hTitle").textContent = titles[tab];
-  document.getElementById("hDate").textContent = fmtLong(today());
+  document.getElementById("hDate").textContent = fmtLong(tab==="today"?selDate:today());
   const m=document.getElementById("main");
   if (tab==="today") m.innerHTML = viewToday();
+  else if (tab==="history") m.innerHTML = viewHistory();
   else if (tab==="lifts") m.innerHTML = viewLifts();
   else if (tab==="trends") m.innerHTML = viewTrends();
   else m.innerHTML = viewExport();
 }
 
-/* ================= TODAY ================= */
+/* ================= LOG (day view, any date) ================= */
 function viewToday(){
-  const d = today();
-  return nags(d) + foodCard(d) + workoutCard(d) + bodyCard(d);
+  const d = selDate, isToday = d===today();
+  const bar = `<div class="card" style="padding:10px 14px"><div class="row">
+    <button class="btn small fx" onclick="shiftDay(-1)">‹ prev</button>
+    <input type="date" value="${d}" max="${today()}" onchange="setDate(this.value)" style="text-align:center">
+    <button class="btn small fx" ${isToday?'disabled style="opacity:.35"':''} onclick="shiftDay(1)">next ›</button>
+  </div>${isToday?"":`<div class="muted" style="margin-top:6px;text-align:center">Editing a past day — <a href="#" style="color:var(--accent)" onclick="setDate('${today()}');return false">back to today</a></div>`}</div>`;
+  return bar + (isToday?nags(d):"") + foodCard(d) + workoutCard(d) + bodyCard(d);
 }
 function nags(d){
   const dt = parseD(d); let out="";
@@ -356,19 +366,21 @@ function foodCard(d){
       <div class="mn">${logged?"✓ ":""}${esc(m.name.split(" — ")[0])}</div>
       <div class="mm">${esc(m.detail)} · ${m.cal} cal / ${m.protein}g</div></button>`;
   }).join("");
-  const list = meals.map((m,i)=>`<div class="li"><div>${esc(m.name)}<div class="sub">${m.cal} cal · ${m.protein}g protein</div></div>
+  const lblChips = MEAL_LABELS.map(l=>`<button class="${l===mealLabel?'on':''}"
+    onclick="mealLabel='${l}';this.parentNode.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===this))">${l}</button>`).join("");
+  const list = meals.map((m,i)=>`<div class="li"><div>${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${m.cal} cal · ${m.protein}g protein</div></div>
     <button class="del" onclick="delMeal(${i})">✕</button></div>`).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
     <div class="mealgrid">${chips}</div>
-    <details class="cust"><summary>+ Custom / restaurant entry</summary>
-      <div class="row" style="margin-top:8px"><input id="cmName" placeholder="Meal name"></div>
-      <div class="row" style="margin-top:8px">
-        <input id="cmCal" class="num" inputmode="numeric" placeholder="Calories">
-        <input id="cmPro" class="num" inputmode="numeric" placeholder="Protein g">
-        <button class="btn primary fx" onclick="addCustom()">Add</button></div>
-    </details>
+    <h3>Add meal</h3>
+    <div class="seg" id="lblseg">${lblChips}</div>
+    <div class="row"><input id="cmName" placeholder="What was it? (e.g. chipotle bowl)"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="cmCal" class="num" inputmode="numeric" placeholder="Calories">
+      <input id="cmPro" class="num" inputmode="numeric" placeholder="Protein g">
+      <button class="btn primary fx" onclick="addCustom()">Add</button></div>
     ${list?`<div class="loggedlist">${list}</div>`:""}
     <div class="tot"><div class="tl"><span>Calories</span><span><b>${t.cal}</b> / ${T.cal}</span></div>
       <div class="bar"><i class="${t.cal>T.cal+60?'over':''}" style="width:${calPct}%"></i></div></div>
@@ -377,73 +389,108 @@ function foodCard(d){
       <div class="hint">${pLeft>0?pLeft+"g protein left to hit target"+(t.protein>=T.proteinFloor?" (floor of "+T.proteinFloor+"g met ✓)":""):"Protein target hit ✓"}</div></div>
   </div>`;
 }
+const MEAL_LABELS = ["Breakfast","Lunch","Snack","Dinner","Other"];
+let mealLabel = "Breakfast";
 function tapMeal(tid){
-  const d=today(); const meals=DB.meals[d]=DB.meals[d]||[];
+  const d=selDate; const meals=DB.meals[d]=DB.meals[d]||[];
   const i=meals.findIndex(m=>m.tid===tid);
   if(i>=0){ meals.splice(i,1); }
   else { const m=CFG.mealTemplates.find(x=>x.id===tid);
-    meals.push({tid, name:m.name, cal:m.cal, protein:m.protein}); }
+    meals.push({tid, label:m.name.split(" — ")[0], name:m.detail, cal:m.cal, protein:m.protein}); }
   Store.save(); render();
 }
 function addCustom(){
   const n=document.getElementById("cmName").value.trim();
   const c=+document.getElementById("cmCal").value, p=+document.getElementById("cmPro").value||0;
   if(!n||!c){ toast("Name + calories required"); return; }
-  const d=today(); (DB.meals[d]=DB.meals[d]||[]).push({name:n, cal:c, protein:p});
+  const d=selDate; (DB.meals[d]=DB.meals[d]||[]).push({label:mealLabel, name:n, cal:c, protein:p});
   Store.save(); render();
 }
-function delMeal(i){ const d=today(); DB.meals[d].splice(i,1); Store.save(); render(); }
+function delMeal(i){ const d=selDate; DB.meals[d].splice(i,1); Store.save(); render(); }
 
+let addExSel = "";
+function allExercises(){
+  const seen={}, out=[];
+  for (const s of Object.values(CFG.sessions)) if(s.exercises)
+    for (const e of s.exercises) if(!seen[e.n]){ seen[e.n]=1; out.push(e); }
+  return out;
+}
+function loggedSets(w,n){ return ((w&&w.sets&&w.sets[n])||[]).filter(x=>x.w>0||x.r>0); }
 function workoutCard(d){
   const sid = CFG.split[dow(d)];
   const s = CFG.sessions[sid];
   const w = DB.workouts[d];
-  if (s.type==="rest")
-    return `<div class="card"><h2>Workout</h2><div class="center">Rest day. Recovery is part of the program.</div></div>`;
-  if (s.type==="run"){
-    const r = (w&&w.run)||{};
-    return `<div class="card"><h2>Workout — ${esc(s.name)}</h2>
-      <div class="muted">${esc(s.detail)}</div>
-      <div class="row" style="margin-top:10px">
-        <div><label class="fl">Distance (mi)</label><input class="num" inputmode="decimal" value="${r.dist??""}" onchange="saveRun('dist',this.value)"></div>
-        <div><label class="fl">Duration (min)</label><input class="num" inputmode="decimal" value="${r.dur??""}" onchange="saveRun('dur',this.value)"></div></div>
-      <label class="fl">Note</label><input value="${esc(r.note??"")}" onchange="saveRun('note',this.value)">
-      <div style="margin-top:12px"><button class="btn ${w&&w.done?'done':'primary'}" onclick="toggleDone()">${w&&w.done?"✓ Run logged":"Mark run complete"}</button></div>
-    </div>`;
+  let html = `<div class="card"><h2>Workout${s.type!=="rest"?` — prescribed: ${esc(s.name)}`:""}</h2>`;
+  if (s.type==="rest") html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
+
+  // prescribed exercises as tappable quick-picks with progress badges
+  if (s.type==="lift"){
+    html += s.exercises.map(ex=>{
+      const done = loggedSets(w,ex.n).length;
+      const rdy = readyToProgress(ex.n);
+      const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
+      return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
+        <div>${esc(ex.n)}<div class="sub">${rx}${rdy?' · <span style="color:var(--good)">▲ hit top of range last time — add weight</span>':""}</div></div>
+        <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
+    }).join("");
   }
-  // lifting day
-  let html = `<div class="card"><h2>Workout — ${esc(s.name)}</h2>`;
-  for (const ex of s.exercises){
-    const cur = (w&&w.sets&&w.sets[ex.n])||[];
-    const hist = exHistory(ex.n, d);
-    const last = hist.length?hist[hist.length-1]:null;
-    const rdy = readyToProgress(ex.n);
-    const rxTxt = `${ex.sets} × ${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
-    html += `<div class="exname"><b>${esc(ex.n)}</b><span class="rx">${rxTxt}${last?` · last: ${fmtShort(last.date)}`:""}</span></div>`;
-    if (rdy && rdy.date !== d) html += `<div class="flag">▲ Hit top of range last session — add weight today</div>`;
-    html += `<div class="sethead"><span></span><span style="text-align:center">${CFG.units.weight}</span><span style="text-align:center">${ex.unit==="sec"?"sec":"reps"}</span></div>`;
-    for (let i=0;i<ex.sets;i++){
-      const c = cur[i]||{};
-      const pf = last&&last.sets[Math.min(i,last.sets.length-1)] || {};
-      html += `<div class="setrow"><span class="sn">${i+1}</span>
-        <input class="num" inputmode="decimal" value="${c.w??pf.w??""}" placeholder="${pf.w??"wt"}" onchange="saveSet('${esc(ex.n)}',${i},'w',this.value)">
-        <input class="num" inputmode="numeric" value="${c.r??""}" placeholder="${pf.r??ex.hi}" onchange="saveSet('${esc(ex.n)}',${i},'r',this.value)"></div>`;
-    }
+
+  // run form (always on run days; collapsible elsewhere)
+  const r = (w&&w.run)||{};
+  const runForm = `
+    <div class="row" style="margin-top:6px">
+      <div><label class="fl">Distance (mi)</label><input class="num" inputmode="decimal" value="${r.dist??""}" onchange="saveRun('dist',this.value)"></div>
+      <div><label class="fl">Duration (min)</label><input class="num" inputmode="decimal" value="${r.dur??""}" onchange="saveRun('dur',this.value)"></div></div>
+    <label class="fl">Note</label><input value="${esc(r.note??"")}" onchange="saveRun('note',this.value)">`;
+  if (s.type==="run") html += `<div class="muted">${esc(s.detail)}</div>${runForm}`;
+  else html += `<details class="cust" ${(r.dist||r.dur)?"open":""}><summary>+ Log a run</summary>${runForm}</details>`;
+
+  // add set — pick any exercise, weight/reps prefilled from last session
+  const opts = allExercises().map(e=>`<option value="${esc(e.n)}" ${e.n===addExSel?"selected":""}>${esc(e.n)}</option>`).join("");
+  const selRx = exPrescription(addExSel);
+  const h = addExSel ? exHistory(addExSel, d) : [];
+  const last = h.length ? h[h.length-1] : null;
+  const nDone = loggedSets(w, addExSel).length;
+  const pfW = last ? (last.sets[Math.min(nDone,last.sets.length-1)]||{}).w ?? "" : "";
+  html += `<h3>Add set</h3>
+    <select onchange="selEx(this.value)"><option value="" ${addExSel?"":"selected"} disabled>Pick an exercise…</option>${opts}</select>
+    ${addExSel?`<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${last.sets.map(x=>`${x.w}×${x.r}`).join(", ")}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>`:""}
+    <div class="row" style="margin-top:8px">
+      <input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}" value="${pfW}">
+      <input id="asR" class="num" inputmode="numeric" placeholder="${selRx&&selRx.unit==='sec'?'sec':'reps'}">
+      <button class="btn primary fx" onclick="addSet()">Add set</button></div>`;
+
+  // what's logged so far, bundled per exercise (interleaving is fine — sets append per name)
+  if (w && w.sets){
+    const rows = Object.entries(w.sets).map(([n,arr])=>{
+      const ss = arr.filter(x=>x.w>0||x.r>0); if(!ss.length) return "";
+      return `<div class="li"><div><b>${esc(n)}</b><div class="sub">${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div></div>
+        <button class="del" title="remove last set" onclick="delLastSet('${esc(n)}')">⌫</button></div>`;
+    }).join("");
+    if (rows) html += `<div class="loggedlist">${rows}</div>`;
   }
   html += `<div style="margin-top:12px"><button class="btn ${w&&w.done?'done':'primary'}" onclick="toggleDone()">${w&&w.done?"✓ Workout logged":"Mark workout complete"}</button></div></div>`;
   return html;
 }
+function selEx(n){
+  addExSel=n; render();
+  const el=document.getElementById("asW"); if(el) el.focus();
+}
+function addSet(){
+  if(!addExSel){ toast("Pick an exercise first"); return; }
+  const wv=+document.getElementById("asW").value||0, rv=+document.getElementById("asR").value||0;
+  if(!rv){ toast("Enter reps"); return; }
+  const w=ensureW(); (w.sets[addExSel]=w.sets[addExSel]||[]).push({w:wv, r:rv});
+  Store.save(); render();
+}
+function delLastSet(n){
+  const w=DB.workouts[selDate];
+  if(w&&w.sets[n]){ w.sets[n].pop(); if(!w.sets[n].length) delete w.sets[n]; Store.save(); render(); }
+}
 function ensureW(){
-  const d=today(), sid=CFG.split[dow(d)];
+  const d=selDate, sid=CFG.split[dow(d)];
   const w = DB.workouts[d] = DB.workouts[d] || { session:sid, sets:{}, run:{}, done:false };
   return w;
-}
-function saveSet(ex,i,f,v){
-  const w=ensureW(); const arr=w.sets[ex]=w.sets[ex]||[];
-  while(arr.length<=i) arr.push({});
-  arr[i][f]=+v||0;
-  // if weight entered but reps blank on this row, don't count it yet
-  Store.save();
 }
 function saveRun(f,v){ const w=ensureW(); w.run[f]=f==="note"?v:(+v||0); Store.save(); }
 function toggleDone(){ const w=ensureW(); w.done=!w.done; Store.save(); render(); }
@@ -461,7 +508,7 @@ function bodyCard(d){
   </div>`;
 }
 function saveBody(k,v){
-  const d=today();
+  const d=selDate;
   if(k==="photos"){ if(v.trim()) DB.photos[d]=v.trim(); else delete DB.photos[d]; }
   else { const n=+v; if(n>0) DB[k][d]=n; else delete DB[k][d]; }
   Store.save(); toast("Saved");
@@ -525,6 +572,38 @@ function barChart(days, vals, opts={}){
   g+=`<text x="${P.l}" y="${H-4}" font-size="10" fill="#5a6675">${fmtShort(days[0])}</text>
       <text x="${W-P.r}" y="${H-4}" text-anchor="end" font-size="10" fill="#5a6675">${fmtShort(days[days.length-1])}</text>`;
   return `<div class="chartwrap"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${g}</svg></div>`;
+}
+
+/* ================= HISTORY ================= */
+function viewHistory(){
+  const dates = new Set([...Object.keys(DB.meals), ...Object.keys(DB.workouts), ...Object.keys(DB.weight), ...Object.keys(DB.waist)]);
+  const list = [...dates].filter(d=>{
+    const hasMeals = DB.meals[d]&&DB.meals[d].length;
+    const w = DB.workouts[d];
+    const hasWo = w && (Object.keys(w.sets||{}).some(n=>loggedSets(w,n).length) || (w.run&&(w.run.dist||w.run.dur)));
+    return hasMeals || hasWo || DB.weight[d]!=null || DB.waist[d]!=null;
+  }).sort().reverse().slice(0,60);
+  if (!list.length) return `<div class="card"><div class="center">Nothing logged yet. Log a day and it shows up here.</div></div>`;
+  return list.map(d=>{
+    const t = DB.meals[d]&&DB.meals[d].length ? dayTotals(d) : null;
+    const meals = (DB.meals[d]||[]).map(m=>`<div class="sub">🍽 ${m.label?esc(m.label)+": ":""}${esc(m.name)} — ${m.cal} cal / ${m.protein}g</div>`).join("");
+    const w = DB.workouts[d]; let wo="";
+    if (w){
+      if (w.sets) for (const [n,arr] of Object.entries(w.sets)){
+        const ss = arr.filter(x=>x.w>0||x.r>0);
+        if (ss.length) wo += `<div class="sub">🏋 ${esc(n)}: ${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div>`;
+      }
+      if (w.run&&(w.run.dist||w.run.dur)) wo += `<div class="sub">🏃 ${w.run.dist||"?"} mi / ${w.run.dur||"?"} min${w.run.note?" — "+esc(w.run.note):""}</div>`;
+    }
+    const body = [DB.weight[d]!=null?`${DB.weight[d]} ${CFG.units.weight}`:null, DB.waist[d]!=null?`waist ${DB.waist[d]} ${CFG.units.waist}`:null].filter(Boolean).join(" · ");
+    return `<div class="card">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">${fmtLong(d)}
+        <button class="btn small" onclick="setDate('${d}');go('today')">Edit day</button></h2>
+      ${t?`<div style="font-size:14px;margin-bottom:6px"><b>${t.cal}</b> cal · <b>${t.protein}g</b> protein${w&&w.done?' · <span style="color:var(--good)">workout ✓</span>':""}</div>`:""}
+      ${meals}${wo}
+      ${body?`<div class="sub" style="margin-top:4px">⚖ ${body}</div>`:""}
+    </div>`;
+  }).join("");
 }
 
 /* ================= LIFTS VIEW ================= */
@@ -649,7 +728,7 @@ function genClaude(){
     const flag=t.protein>=T.proteinFloor?"":" ⚠ under protein floor";
     s+=`${d}: ${t.cal} cal, ${t.protein}g protein${cheat}${flag}\n`;
     const custom=DB.meals[d].filter(m=>!m.tid);
-    for(const m of custom) s+=`   custom: ${m.name} (${m.cal} cal, ${m.protein}g)\n`;
+    for(const m of custom) s+=`   ${m.label?m.label.toLowerCase()+": ":""}${m.name} (${m.cal} cal, ${m.protein}g)\n`;
   }
   if(!any) s+="none logged\n";
   s+="\n## Key lifts — full history (weight×reps per set, best e1RM)\n";
