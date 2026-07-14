@@ -12,16 +12,39 @@ export function init(r, g){ render = r; go = g; }
 
 /* ================= LOG (any day) ================= */
 export function viewToday(){
-  const d = S.selDate, isToday = d===today();
+  const d = S.selDate, isToday = d===today(), future = d>today();
   const bar = `<div class="card" style="padding:10px 14px"><div class="row">
     <button class="btn small fx" onclick="shiftDay(-1)">‹ prev</button>
-    <input type="date" value="${d}" max="${today()}" onchange="setDate(this.value)" style="text-align:center">
-    <button class="btn small fx" ${isToday?'disabled style="opacity:.35"':''} onclick="shiftDay(1)">next ›</button>
-  </div>${isToday?"":`<div class="muted" style="margin-top:6px;text-align:center">Editing a past day — <a href="#" style="color:var(--accent)" onclick="setDate('${today()}');return false">back to today</a></div>`}</div>`;
+    <input type="date" value="${d}" onchange="setDate(this.value)" style="text-align:center">
+    <button class="btn small fx" onclick="shiftDay(1)">next ›</button>
+  </div>${isToday?"":`<div class="muted" style="margin-top:6px;text-align:center">${future?"Upcoming day — preview only":"Editing a past day"} — <a href="#" style="color:var(--accent)" onclick="setDate('${today()}');return false">back to today</a></div>`}</div>`;
+  if (future) return bar + plannedCard(d);
   return bar + (isToday?nags(d):"") + foodCard(d) + workoutCard(d) + bodyCard(d);
 }
-export function shiftDay(n){ const d=parseD(S.selDate); d.setDate(d.getDate()+n); const s=dstr(d); if(s<=today()){ S.selDate=s; S.addExSel=""; } render(); }
-export function setDate(v){ if(v && v<=today()){ S.selDate=v; S.addExSel=""; render(); } }
+export function shiftDay(n){ const d=parseD(S.selDate); d.setDate(d.getDate()+n); S.selDate=dstr(d); S.addExSel=""; render(); }
+export function setDate(v){ if(v){ S.selDate=v; S.addExSel=""; render(); } }
+
+/* preview of a future day's prescribed session */
+function plannedCard(d){
+  const sid = CFG.split[dow(d)], s = CFG.sessions[sid];
+  const isCheat = dow(d)===CFG.cheatDay;
+  let html = `<div class="card"><h2>Planned — ${esc(s.name)}</h2>`;
+  if (s.type==="rest") html += `<div class="center">Rest day. Nothing on the calendar.</div>`;
+  else if (s.type==="run") html += `<div class="muted">${esc(s.detail)}</div>`;
+  else {
+    html += s.exercises.map(ex=>{
+      const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
+      const h = exHistory(ex.n);
+      const last = h.length ? h[h.length-1] : null;
+      const rdy = readyToProgress(ex.n);
+      return `<div class="li"><div>${esc(ex.n)}<div class="sub">${rx}${last?` · last: ${last.sets.map(x=>`${x.w}×${x.r}`).join(", ")}`:""}</div></div>
+        ${rdy?'<span class="badge good">▲ add weight</span>':""}</div>`;
+    }).join("");
+  }
+  html += `</div>`;
+  if (isCheat) html += `<div class="card"><h2>Food</h2><div class="muted">Cheat day — breakfast + lunch as normal, skip the snack, restaurant dinner. Part of the plan.</div></div>`;
+  return html;
+}
 
 function nags(d){
   const dt = parseD(d); let out="";
