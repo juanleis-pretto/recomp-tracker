@@ -171,21 +171,38 @@ export function toggleDone(bid){
 /* ---------- body ---------- */
 function bodyCard(d){
   const wt=DB.weight[d], wa=DB.waist[d], ph=DB.photos[d];
+  const stat = (v,unit) => v!=null
+    ? `<div class="hint" style="color:var(--good)">✓ ${v} ${unit} saved for ${fmtShort(d)} — enter a new value to overwrite, or save blank to clear</div>`
+    : `<div class="hint">Not logged for this day</div>`;
   return `<div class="card"><h2>Body</h2>
+    <label class="fl">Weight (${CFG.units.weight})</label>
     <div class="row">
-      <div><label class="fl">Weight (${CFG.units.weight})</label>
-        <input class="num" inputmode="decimal" value="${wt??""}" placeholder="—" onchange="saveBody('weight',this.value)"></div>
-      <div><label class="fl">Waist (${CFG.units.waist})</label>
-        <input class="num" inputmode="decimal" value="${wa??""}" placeholder="monthly" onchange="saveBody('waist',this.value)"></div></div>
+      <input id="bWt" class="num" inputmode="decimal" value="${wt??""}" placeholder="—">
+      <button class="btn primary fx" onclick="saveBody('weight','bWt')">${wt!=null?"Update":"Save weight"}</button></div>
+    ${stat(wt, CFG.units.weight)}
+    <label class="fl">Waist (${CFG.units.waist}) — monthly</label>
+    <div class="row">
+      <input id="bWa" class="num" inputmode="decimal" value="${wa??""}" placeholder="—">
+      <button class="btn primary fx" onclick="saveBody('waist','bWa')">${wa!=null?"Update":"Save waist"}</button></div>
+    ${stat(wa, CFG.units.waist)}
     <label class="fl">Progress photo note (filename / where saved)</label>
-    <input value="${esc(ph??"")}" placeholder="e.g. IMG_2041 front+side" onchange="saveBody('photos',this.value)">
+    <div class="row">
+      <input id="bPh" value="${esc(ph??"")}" placeholder="e.g. IMG_2041 front+side">
+      <button class="btn primary fx" onclick="saveBody('photos','bPh')">${ph?"Update":"Save note"}</button></div>
+    ${ph?`<div class="hint" style="color:var(--good)">✓ saved for ${fmtShort(d)}</div>`:""}
   </div>`;
 }
-export function saveBody(k,v){
-  const d=S.selDate;
+export function saveBody(k, inputId){
+  const d=S.selDate, v=document.getElementById(inputId).value;
   if(k==="photos"){ if(v.trim()) DB.photos[d]=v.trim(); else delete DB.photos[d]; }
-  else { const n=+v; if(n>0) DB[k][d]=n; else delete DB[k][d]; }
-  Store.save(); toast("Saved");
+  else {
+    const n=+v;
+    if(v.trim()==="" ) delete DB[k][d];
+    else if(!(n>0)){ toast("Enter a number"); return; }
+    else DB[k][d]=n;
+  }
+  Store.save(); render();
+  toast(v.trim()===""?"Cleared":"Saved for "+fmtShort(d));
 }
 
 /* ================= HISTORY ================= */
