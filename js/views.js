@@ -2,7 +2,7 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone,
-         allExercises, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
+         allExercises, allLoggedExercises, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
@@ -290,11 +290,12 @@ export function viewLifts(){
   } else html += `<div class="center">Log a ${esc(S.liftSel)} session and it shows up here.</div>`;
   html += `</div>`;
   const others=[];
-  for (const e of allExercises()) if(!CFG.keyLifts.includes(e.n)){
-    const hh=exHistory(e.n); if(!hh.length) continue;
+  for (const n of allLoggedExercises()) if(!CFG.keyLifts.includes(n)){
+    const hh=exHistory(n); if(!hh.length) continue;
     const lastS=hh[hh.length-1];
-    others.push(`<div class="li"><div>${esc(e.n)}<div class="sub">last ${fmtShort(lastS.date)}: ${lastS.sets.map(x=>`${x.w}×${x.r}`).join(", ")}</div></div>
-      ${readyToProgress(e.n)?'<span class="badge good">▲ progress</span>':''}</div>`);
+    const retired = !exPrescription(n);
+    others.push(`<div class="li"><div>${esc(n)}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${lastS.sets.map(x=>`${x.w}×${x.r}`).join(", ")}</div></div>
+      ${readyToProgress(n)?'<span class="badge good">▲ progress</span>':''}</div>`);
   }
   if(others.length) html+=`<div class="card"><h2>Accessories</h2>${others.join("")}</div>`;
   return html;
@@ -390,10 +391,11 @@ export function genClaude(){
     for(const sess of h) s+=`${sess.date}: ${sess.sets.map(x=>`${x.w}×${x.r}`).join(", ")} | e1RM ${bestE1RM(sess.sets)}\n`;
   }
   s+="\n## Other exercises — last session each\n";
-  for(const e of allExercises()) if(!CFG.keyLifts.includes(e.n)){
-    const h=exHistory(e.n); if(!h.length) continue;
+  for(const n of allLoggedExercises()) if(!CFG.keyLifts.includes(n)){
+    const h=exHistory(n); if(!h.length) continue;
     const lastS=h[h.length-1];
-    s+=`${e.n}: ${lastS.date} — ${lastS.sets.map(x=>`${x.w}×${x.r}`).join(", ")}${readyToProgress(e.n)?" [ready to progress]":""}\n`;
+    const retired = !exPrescription(n);
+    s+=`${n}${retired?" [no longer in program]":""}: ${lastS.date} — ${lastS.sets.map(x=>`${x.w}×${x.r}`).join(", ")}${readyToProgress(n)?" [ready to progress]":""}\n`;
   }
   s+="\n## Runs — last 30 days\n"; let anyRun=false;
   for(const d of days) for(const b of blocks(d))

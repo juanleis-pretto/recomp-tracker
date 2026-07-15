@@ -51,6 +51,13 @@ export function allExercises(){
     for (const e of s.exercises) if(!seen[e.n]){ seen[e.n]=1; out.push(e); }
   return out;
 }
+// configured exercises + anything ever logged (retired program items keep their history)
+export function allLoggedExercises(){
+  const names = new Set(allExercises().map(e=>e.n));
+  for (const d of Object.keys(DB.workouts))
+    for (const b of blocks(d)) for (const n of Object.keys(b.sets||{})) names.add(n);
+  return [...names];
+}
 export function exPrescription(name){
   for (const s of Object.values(CFG.sessions))
     if (s.exercises){ const e=s.exercises.find(e=>e.n===name); if(e) return e; }
