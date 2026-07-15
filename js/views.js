@@ -117,34 +117,41 @@ function workoutCard(d){
   }
   if (s.type==="run") html += `<div class="muted">${esc(s.detail)}</div>`;
 
-  // add segment — targets the active workout (2h window) or starts a new one
-  const opts = allExercises().map(e=>`<option value="${esc(e.n)}" ${e.n===S.addExSel?"selected":""}>${esc(e.n)}</option>`).join("");
-  const selRx = exPrescription(S.addExSel);
-  const h = S.addExSel ? exHistory(S.addExSel, d) : [];
-  const last = h.length ? h[h.length-1] : null;
-  const nDone = daySetCount(d, S.addExSel);
-  const pfW = last ? ((last.sets[Math.min(nDone,last.sets.length-1)]||{}).w ?? "") : "";
+  // ---- add exercise: pick Run or a lift; inputs appear per type ----
+  if (s.type==="run" && !S.addExSel) S.addExSel = "__run";
+  const opts = `<option value="" ${S.addExSel?"":"selected"} disabled>Choose: run or a lift…</option>
+    <option value="__run" ${S.addExSel==="__run"?"selected":""}>🏃 Run</option>
+    <optgroup label="Lifts">` +
+    allExercises().map(e=>`<option value="${esc(e.n)}" ${e.n===S.addExSel?"selected":""}>${esc(e.n)}</option>`).join("") +
+    `</optgroup>`;
+  html += `<h3>Add exercise</h3><select onchange="selEx(this.value)">${opts}</select>`;
+
   const lastB = arr[arr.length-1];
   const joining = lastB && (d!==today() || (Date.now()-(lastB.t1||lastB.t0)) <= CFG.workoutWindowMs);
-  html += `<h3>Add set</h3>
-    <select onchange="selEx(this.value)"><option value="" ${S.addExSel?"":"selected"} disabled>Pick an exercise…</option>${opts}</select>
-    ${S.addExSel?`<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${last.sets.map(x=>`${x.w}×${x.r}`).join(", ")}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>`:""}
+  const joinTxt = `<div class="muted" style="margin-top:6px">${joining?`→ adds to Workout ${arr.length}${d===today()&&lastB.t0?` (started ${fmtTime(lastB.t0)})`:""} · <a href="#" style="color:var(--accent)" onclick="startNewWorkout();return false">start a new workout instead</a>`:"→ starts a new workout"}</div>`;
+
+  if (S.addExSel === "__run"){
+    const runB = arr.find(b=>b.run&&(b.run.dist||b.run.dur||b.run.note));
+    const r = (runB&&runB.run)||{};
+    html += `<div class="row" style="margin-top:8px">
+      <div><label class="fl">Distance (mi)</label><input id="rDist" class="num" inputmode="decimal" value="${r.dist??""}"></div>
+      <div><label class="fl">Duration (min)</label><input id="rDur" class="num" inputmode="decimal" value="${r.dur??""}"></div></div>
+    <label class="fl">Note</label><input id="rNote" value="${esc(r.note??"")}" placeholder="optional">
+    <div style="margin-top:10px"><button class="btn primary" onclick="saveRun()">${runB?"Update run":"Save run"}</button></div>
+    ${runB?"":joinTxt}`;
+  } else if (S.addExSel){
+    const selRx = exPrescription(S.addExSel);
+    const h = exHistory(S.addExSel, d);
+    const last = h.length ? h[h.length-1] : null;
+    const nDone = daySetCount(d, S.addExSel);
+    const pfW = last ? ((last.sets[Math.min(nDone,last.sets.length-1)]||{}).w ?? "") : "";
+    html += `<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${last.sets.map(x=>`${x.w}×${x.r}`).join(", ")}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
     <div class="row" style="margin-top:8px">
       <input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}" value="${pfW}">
       <input id="asR" class="num" inputmode="numeric" placeholder="${selRx&&selRx.unit==='sec'?'sec':'reps'}">
       <button class="btn primary fx" onclick="addSet()">Add set</button></div>
-    <div class="muted" style="margin-top:6px">${joining?`→ adds to Workout ${arr.length}${d===today()&&lastB.t0?` (started ${fmtTime(lastB.t0)})`:""} · <a href="#" style="color:var(--accent)" onclick="startNewWorkout();return false">start a new workout instead</a>`:"→ starts a new workout"}</div>`;
-
-  // run logging attaches to the workout too
-  const runB = arr.find(b=>b.run&&(b.run.dist||b.run.dur||b.run.note)) || lastB;
-  const r = (runB&&runB.run)||{};
-  const runForm = `
-    <div class="row" style="margin-top:6px">
-      <div><label class="fl">Distance (mi)</label><input class="num" inputmode="decimal" value="${r.dist??""}" onchange="saveRun('dist',this.value)"></div>
-      <div><label class="fl">Duration (min)</label><input class="num" inputmode="decimal" value="${r.dur??""}" onchange="saveRun('dur',this.value)"></div></div>
-    <label class="fl">Note</label><input value="${esc(r.note??"")}" onchange="saveRun('note',this.value)">`;
-  if (s.type==="run") html += runForm;
-  else html += `<details class="cust" ${(r.dist||r.dur)?"open":""}><summary>+ Log a run</summary>${runForm}</details>`;
+    ${joinTxt}`;
+  }
 
   // logged workouts for the day
   arr.forEach((b,bi)=>{
@@ -177,13 +184,17 @@ export function delLastSet(bid, n){
   const b = blocks(S.selDate).find(x=>x.id===bid);
   if(b&&b.sets[n]){ b.sets[n].pop(); if(!b.sets[n].length) delete b.sets[n]; Store.save(); render(); }
 }
-export function saveRun(f,v){
+export function saveRun(){
+  const dist=+document.getElementById("rDist").value||0;
+  const dur=+document.getElementById("rDur").value||0;
+  const note=document.getElementById("rNote").value.trim();
+  if(!dist && !dur){ toast("Enter distance or duration"); return; }
   const arr = blocks(S.selDate);
-  let b = arr.find(x=>x.run&&(x.run.dist||x.run.dur||x.run.note)) || arr[arr.length-1];
-  if(!b) b = newBlock(S.selDate);
-  b.run[f] = f==="note" ? v : (+v||0);
+  let b = arr.find(x=>x.run&&(x.run.dist||x.run.dur||x.run.note));
+  if(!b){ b = attachBlock(S.selDate, S._forceNew); S._forceNew=false; }
+  b.run = { dist, dur, note };
   b.t1 = Date.now();
-  Store.save();
+  Store.save(); render(); toast("Run saved");
 }
 export function toggleDone(bid){
   let b = blocks(S.selDate).find(x=>x.id===bid);
