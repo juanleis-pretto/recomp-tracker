@@ -1,6 +1,6 @@
 import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store } from "./store.js";
-import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast } from "./util.js";
+import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone,
          allExercises, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
@@ -90,7 +90,7 @@ function foodCard(d){
 export function pickLabel(l, el){ S.mealLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
 export function addCustom(){
   const n=document.getElementById("cmName").value.trim();
-  const c=+document.getElementById("cmCal").value, p=+document.getElementById("cmPro").value||0;
+  const c=num(document.getElementById("cmCal").value), p=num(document.getElementById("cmPro").value);
   if(!n||!c){ toast("Name + calories required"); return; }
   (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push({label:S.mealLabel, name:n, cal:c, protein:p});
   Store.save(); render();
@@ -173,7 +173,7 @@ function workoutCard(d){
 export function selEx(n){ S.addExSel=n; render(); const el=document.getElementById("asW"); if(el) el.focus(); }
 export function addSet(){
   if(!S.addExSel){ toast("Pick an exercise first"); return; }
-  const wv=+document.getElementById("asW").value||0, rv=+document.getElementById("asR").value||0;
+  const wv=num(document.getElementById("asW").value), rv=num(document.getElementById("asR").value);
   if(!rv){ toast("Enter reps"); return; }
   const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
   (b.sets[S.addExSel]=b.sets[S.addExSel]||[]).push({w:wv, r:rv});
@@ -185,8 +185,8 @@ export function delLastSet(bid, n){
   if(b&&b.sets[n]){ b.sets[n].pop(); if(!b.sets[n].length) delete b.sets[n]; Store.save(); render(); }
 }
 export function saveRun(){
-  const dist=+document.getElementById("rDist").value||0;
-  const dur=+document.getElementById("rDur").value||0;
+  const dist=num(document.getElementById("rDist").value);
+  const dur=num(document.getElementById("rDur").value);
   const note=document.getElementById("rNote").value.trim();
   if(!dist && !dur){ toast("Enter distance or duration"); return; }
   const arr = blocks(S.selDate);
@@ -230,7 +230,7 @@ export function saveBody(k, inputId){
   const d=S.selDate, v=document.getElementById(inputId).value;
   if(k==="photos"){ if(v.trim()) DB.photos[d]=v.trim(); else delete DB.photos[d]; }
   else {
-    const n=+v;
+    const n=num(v);
     if(v.trim()==="" ) delete DB[k][d];
     else if(!(n>0)){ toast("Enter a number"); return; }
     else DB[k][d]=n;
