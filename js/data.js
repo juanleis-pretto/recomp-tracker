@@ -5,7 +5,8 @@ import { today, epley } from "./util.js";
 /* ---------- nutrition ---------- */
 export function dayTotals(date){
   const meals = DB.meals[date]||[];
-  return meals.reduce((a,m)=>({cal:a.cal+(+m.cal||0), protein:a.protein+(+m.protein||0)}),{cal:0,protein:0});
+  const t = meals.reduce((a,m)=>({cal:a.cal+(+m.cal||0), protein:a.protein+(+m.protein||0)}),{cal:0,protein:0});
+  return { cal: Math.round(t.cal*10)/10, protein: Math.round(t.protein*10)/10 };
 }
 
 /* ---------- workout blocks ----------

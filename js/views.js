@@ -76,8 +76,8 @@ function foodCard(d){
     <div class="seg" id="lblseg">${lblChips}</div>
     <div class="row"><input id="cmName" placeholder="What was it? (e.g. chipotle bowl)"></div>
     <div class="row" style="margin-top:8px">
-      <input id="cmCal" class="num" inputmode="numeric" placeholder="Calories">
-      <input id="cmPro" class="num" inputmode="numeric" placeholder="Protein g">
+      <input id="cmCal" class="num" inputmode="decimal" placeholder="Calories">
+      <input id="cmPro" class="num" inputmode="decimal" placeholder="Protein g">
       <button class="btn primary fx" onclick="addCustom()">Add</button></div>
     ${list?`<div class="loggedlist">${list}</div>`:""}
     <div class="tot"><div class="tl"><span>Calories</span><span><b>${t.cal}</b> / ${T.cal}</span></div>
