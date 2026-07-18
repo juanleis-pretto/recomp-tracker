@@ -135,7 +135,8 @@ function workoutCard(d){
     const r = (runB&&runB.run)||{};
     html += `<div class="row" style="margin-top:8px">
       <div><label class="fl">Distance (mi)</label><input id="rDist" class="num" inputmode="decimal" value="${r.dist??""}"></div>
-      <div><label class="fl">Duration (min)</label><input id="rDur" class="num" inputmode="decimal" value="${r.dur??""}"></div></div>
+      <div><label class="fl">Duration (min)</label><input id="rDur" class="num" inputmode="decimal" value="${r.dur??""}"></div>
+      <div><label class="fl">Cal burned</label><input id="rCal" class="num" inputmode="decimal" value="${r.kcal||""}" placeholder="opt."></div></div>
     <label class="fl">Note</label><input id="rNote" value="${esc(r.note??"")}" placeholder="optional">
     <div style="margin-top:10px"><button class="btn primary" onclick="saveRun()">${runB?"Update run":"Save run"}</button></div>
     ${runB?"":joinTxt}`;
@@ -162,7 +163,7 @@ function workoutCard(d){
       return `<div class="li"><div><b>${esc(n)}</b><div class="sub">${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div></div>
         <button class="del" title="remove last set" onclick="delLastSet('${b.id}','${esc(n)}')">⌫</button></div>`;
     }).join("");
-    if (b.run&&(b.run.dist||b.run.dur)) rows += `<div class="li"><div><b>Run</b><div class="sub">${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.note?" — "+esc(b.run.note):""}</div></div></div>`;
+    if (b.run&&(b.run.dist||b.run.dur)) rows += `<div class="li"><div><b>Run</b><div class="sub">${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div></div></div>`;
     html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Workout ${bi+1}${timeTxt}
       <button class="btn small ${b.done?'done':''}" onclick="toggleDone('${b.id}')">${b.done?"✓ done":"mark done"}</button></h3>
     <div class="loggedlist" style="margin-top:0">${rows}</div>`;
@@ -188,11 +189,12 @@ export function saveRun(){
   const dist=num(document.getElementById("rDist").value);
   const dur=num(document.getElementById("rDur").value);
   const note=document.getElementById("rNote").value.trim();
+  const kcal=num(document.getElementById("rCal").value);
   if(!dist && !dur){ toast("Enter distance or duration"); return; }
   const arr = blocks(S.selDate);
   let b = arr.find(x=>x.run&&(x.run.dist||x.run.dur||x.run.note));
   if(!b){ b = attachBlock(S.selDate, S._forceNew); S._forceNew=false; }
-  b.run = { dist, dur, note };
+  b.run = { dist, dur, note, kcal };
   b.t1 = Date.now();
   Store.save(); render(); toast("Run saved");
 }
@@ -257,7 +259,7 @@ export function viewHistory(){
         const ss = arr.filter(x=>x.w>0||x.r>0);
         if (ss.length) wo += `<div class="sub">🏋 ${esc(n)}: ${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div>`;
       }
-      if (b.run&&(b.run.dist||b.run.dur)) wo += `<div class="sub">🏃 ${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.note?" — "+esc(b.run.note):""}</div>`;
+      if (b.run&&(b.run.dist||b.run.dur)) wo += `<div class="sub">🏃 ${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div>`;
     });
     const body = [DB.weight[d]!=null?`${DB.weight[d]} ${CFG.units.weight}`:null, DB.waist[d]!=null?`waist ${DB.waist[d]} ${CFG.units.waist}`:null].filter(Boolean).join(" · ");
     return `<div class="card">
@@ -399,7 +401,7 @@ export function genClaude(){
   }
   s+="\n## Runs — last 30 days\n"; let anyRun=false;
   for(const d of days) for(const b of blocks(d))
-    if(b.run&&(b.run.dist||b.run.dur)){ anyRun=true; s+=`${d}: ${b.run.dist||"?"} mi in ${b.run.dur||"?"} min${b.run.note?" — "+b.run.note:""}\n`; }
+    if(b.run&&(b.run.dist||b.run.dur)){ anyRun=true; s+=`${d}: ${b.run.dist||"?"} mi in ${b.run.dur||"?"} min${b.run.kcal?`, ~${b.run.kcal} cal burned`:""}${b.run.note?" — "+b.run.note:""}\n`; }
   if(!anyRun) s+="none logged\n";
   let rxD=0,dnD=0; for(const d of days){ const sid=CFG.split[dow(d)];
     if(CFG.sessions[sid].type!=="rest"){ rxD++; if(dayDone(d)) dnD++; } }
