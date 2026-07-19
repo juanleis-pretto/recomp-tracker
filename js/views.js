@@ -38,7 +38,7 @@ function plannedCard(d){
       const last = h.length ? h[h.length-1] : null;
       const rdy = readyToProgress(ex.n);
       return `<div class="li"><div>${esc(ex.n)}<div class="sub">${rx}${last?` · last: ${last.sets.map(x=>`${x.w}×${x.r}`).join(", ")}`:""}</div></div>
-        ${rdy?'<span class="badge good">▲ add weight</span>':""}</div>`;
+        ${rdy?'<span class="badge good">▲ go heavier</span>':""}</div>`;
     }).join("");
   }
   html += `</div>`;
@@ -110,8 +110,9 @@ function workoutCard(d){
       const done = daySetCount(d, ex.n);
       const rdy = readyToProgress(ex.n);
       const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
+      const rdyW = rdy ? Math.max(...rdy.sets.map(x=>x.w)) : 0;
       return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
-        <div>${esc(ex.n)}<div class="sub">${rx}${rdy?' · <span style="color:var(--good)">▲ hit top of range last time — add weight</span>':""}</div></div>
+        <div>${esc(ex.n)}<div class="sub">${rx}${rdy?` · <span style="color:var(--good)">▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today</span>`:""}</div></div>
         <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
     }).join("");
   }
@@ -281,7 +282,7 @@ export function viewLifts(){
   const rdy = readyToProgress(S.liftSel);
   const pts = h.map(s=>[s.date, Math.round(Math.max(...s.sets.map(x=>epley(x.w,x.r)))*10)/10]);
   let html = `<div class="card"><h2>Key lift</h2><div class="seg">${seg}</div>`;
-  if (rdy) html+=`<div class="flag">▲ Ready to progress: hit ${rx.hi} reps on all sets on ${fmtShort(rdy.date)}. Add weight next session.</div>`;
+  if (rdy) html+=`<div class="flag">▲ Ready to progress: on ${fmtShort(rdy.date)} you got ${rx.hi} reps on every set (${rdy.sets.map(x=>`${x.w}×${x.r}`).join(", ")}). Use a heavier ${CFG.units.weight==="lb"?"weight":"load"} next session.</div>`;
   html += `<h3>Estimated 1RM (Epley)</h3>`;
   html += lineChart([{pts, color:"#4da3ff", r:3, width:2}]);
   if (h.length){
