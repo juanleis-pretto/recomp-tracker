@@ -158,7 +158,8 @@ function workoutCard(d){
   // logged workouts for the day
   arr.forEach((b,bi)=>{
     if (!blockHasContent(b) && !b.done) return;
-    const timeTxt = b.t0 && dstr(new Date(b.t0))===d ? ` · ${fmtTime(b.t0)}${b.t1&&b.t1-b.t0>60e3?"–"+fmtTime(b.t1):""}` : "";
+    const mins = b.t0 && b.t1 ? Math.round((b.t1-b.t0)/60e3) : 0;
+    const timeTxt = b.t0 && dstr(new Date(b.t0))===d ? ` · ${fmtTime(b.t0)}${b.t1&&b.t1-b.t0>60e3?`–${fmtTime(b.t1)} (${mins} min)`:""}` : "";
     let rows = Object.entries(b.sets||{}).map(([n,setsArr])=>{
       const ss = setsArr.filter(x=>x.w>0||x.r>0); if(!ss.length) return "";
       return `<div class="li"><div><b>${esc(n)}</b><div class="sub">${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div></div>
@@ -255,7 +256,7 @@ export function viewHistory(){
     let wo="";
     const bs = blocks(d).filter(blockHasContent);
     bs.forEach((b,bi)=>{
-      if (bs.length>1) wo += `<div class="sub" style="margin-top:4px"><b>Workout ${bi+1}${b.t0&&dstr(new Date(b.t0))===d?" · "+fmtTime(b.t0):""}</b></div>`;
+      if (bs.length>1) wo += `<div class="sub" style="margin-top:4px"><b>Workout ${bi+1}${b.t0&&dstr(new Date(b.t0))===d?" · "+fmtTime(b.t0)+(b.t1&&b.t1-b.t0>60e3?` (${Math.round((b.t1-b.t0)/60e3)} min)`:""):""}</b></div>`;
       for (const [n,arr] of Object.entries(b.sets||{})){
         const ss = arr.filter(x=>x.w>0||x.r>0);
         if (ss.length) wo += `<div class="sub">🏋 ${esc(n)}: ${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div>`;
