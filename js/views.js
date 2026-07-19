@@ -53,7 +53,7 @@ function nags(d){
   const monthKey = d.slice(0,7);
   const waistThisMonth = Object.keys(DB.waist).some(k=>k.slice(0,7)===monthKey);
   if (dt.getDate()===1 && !waistThisMonth && !DB.dismissed["m"+monthKey])
-    out += `<div class="nag"><span>1st of the month: log waist + progress photo.</span><button class="btn small ghost" onclick="dismiss('m${monthKey}')">Later</button></div>`;
+    out += `<div class="nag"><span>1st of the month: log your waist measurement.</span><button class="btn small ghost" onclick="dismiss('m${monthKey}')">Later</button></div>`;
   return out;
 }
 export function dismiss(k){ DB.dismissed[k]=1; Store.save(); render(); }
@@ -208,7 +208,7 @@ export function toggleDone(bid){
 
 /* ---------- body ---------- */
 function bodyCard(d){
-  const wt=DB.weight[d], wa=DB.waist[d], ph=DB.photos[d];
+  const wt=DB.weight[d], wa=DB.waist[d];
   const stat = (v,unit) => v!=null
     ? `<div class="hint" style="color:var(--good)">✓ ${v} ${unit} saved for ${fmtShort(d)} — enter a new value to overwrite, or save blank to clear</div>`
     : `<div class="hint">Not logged for this day</div>`;
@@ -223,11 +223,6 @@ function bodyCard(d){
       <input id="bWa" class="num" inputmode="decimal" value="${wa??""}" placeholder="—">
       <button class="btn primary fx" onclick="saveBody('waist','bWa')">${wa!=null?"Update":"Save waist"}</button></div>
     ${stat(wa, CFG.units.waist)}
-    <label class="fl">Progress photo note (filename / where saved)</label>
-    <div class="row">
-      <input id="bPh" value="${esc(ph??"")}" placeholder="e.g. IMG_2041 front+side">
-      <button class="btn primary fx" onclick="saveBody('photos','bPh')">${ph?"Update":"Save note"}</button></div>
-    ${ph?`<div class="hint" style="color:var(--good)">✓ saved for ${fmtShort(d)}</div>`:""}
   </div>`;
 }
 export function saveBody(k, inputId){
