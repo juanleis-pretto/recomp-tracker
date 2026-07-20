@@ -67,8 +67,11 @@ function foodCard(d){
   const isCheat = dow(d)===CFG.cheatDay;
   const lblChips = MEAL_LABELS.map(l=>`<button class="${l===S.mealLabel?'on':''}"
     onclick="pickLabel('${l}',this)">${l}</button>`).join("");
-  const list = meals.map((m,i)=>`<div class="li"><div>${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${m.cal} cal · ${m.protein}g protein</div></div>
-    <button class="del" onclick="delMeal(${i})">✕</button></div>`).join("");
+  const list = meals.map((m,i)=>{
+    const tm = m.t && dstr(new Date(m.t))===d ? ` · ${fmtTime(m.t)}` : "";
+    return `<div class="li"><div>${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${m.cal} cal · ${m.protein}g protein${tm}</div></div>
+    <button class="del" onclick="delMeal(${i})">✕</button></div>`;
+  }).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
@@ -92,7 +95,7 @@ export function addCustom(){
   const n=document.getElementById("cmName").value.trim();
   const c=num(document.getElementById("cmCal").value), p=num(document.getElementById("cmPro").value);
   if(!n||!c){ toast("Name + calories required"); return; }
-  (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push({label:S.mealLabel, name:n, cal:c, protein:p});
+  (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push({label:S.mealLabel, name:n, cal:c, protein:p, t:Date.now()});
   Store.save(); render();
 }
 export function delMeal(i){ DB.meals[S.selDate].splice(i,1); Store.save(); render(); }
@@ -247,7 +250,7 @@ export function viewHistory(){
   if (!list.length) return `<div class="card"><div class="center">Nothing logged yet. Log a day and it shows up here.</div></div>`;
   return list.map(d=>{
     const t = DB.meals[d]&&DB.meals[d].length ? dayTotals(d) : null;
-    const meals = (DB.meals[d]||[]).map(m=>`<div class="sub">🍽 ${m.label?esc(m.label)+": ":""}${esc(m.name)} — ${m.cal} cal / ${m.protein}g</div>`).join("");
+    const meals = (DB.meals[d]||[]).map(m=>`<div class="sub">🍽 ${m.label?esc(m.label)+": ":""}${esc(m.name)} — ${m.cal} cal / ${m.protein}g${m.t&&dstr(new Date(m.t))===d?` · ${fmtTime(m.t)}`:""}</div>`).join("");
     let wo="";
     const bs = blocks(d).filter(blockHasContent);
     bs.forEach((b,bi)=>{
