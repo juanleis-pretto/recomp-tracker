@@ -20,7 +20,7 @@ export const CFG = {
       { n:"Cable fly",                      sets:3, lo:12, hi:12 },
       { n:"Triceps pushdown",               sets:3, lo:12, hi:12 },
       { n:"Cable woodchop",                 sets:3, lo:12, hi:12, note:"per side" },
-      { n:"Hanging leg raise",              sets:3, lo:12, hi:12 },
+      { n:"Hanging leg raise",              sets:3, lo:12, hi:12, bw:true },
     ]},
     pull: { name:"Pull", type:"lift", exercises:[
       { n:"Chest-supported dumbbell row", sets:4, lo:8,  hi:8  },
@@ -33,8 +33,8 @@ export const CFG = {
       { n:"Goblet squat",           sets:4, lo:10, hi:10 },
       { n:"Dumbbell RDL (light)",   sets:3, lo:8,  hi:8  },
       { n:"Walking lunge",          sets:3, lo:10, hi:10, note:"per leg" },
-      { n:"Hanging leg raise",      sets:3, lo:12, hi:12 },
-      { n:"Plank",                  sets:3, lo:45, hi:45, unit:"sec" },
+      { n:"Hanging leg raise",      sets:3, lo:12, hi:12, bw:true },
+      { n:"Plank",                  sets:3, lo:45, hi:45, unit:"sec", bw:true },
     ]},
     push_b: { name:"Push (incline emphasis)", type:"lift", exercises:[
       { n:"Incline dumbbell press",       sets:4, lo:8,  hi:8  },
@@ -48,6 +48,10 @@ export const CFG = {
     run_int:  { name:"Run — intervals", type:"run", detail:"10 min warmup · 6 × (2 hard / 2 easy) · 5 min cooldown" },
     rest: { name:"Rest", type:"rest" },
   },
+  // available in the picker on any day, not tied to a prescribed session
+  extraExercises: [
+    { n:"Jump rope", bw:true, unit:"sec", note:"seconds or skips" },
+  ],
   split: { 0:"rest", 1:"push_a", 2:"run_easy", 3:"pull", 4:"legs", 5:"push_b", 6:"run_int" },
   keyLifts: ["Dumbbell bench press","Incline dumbbell press","Chest-supported dumbbell row","Goblet squat"],
 };

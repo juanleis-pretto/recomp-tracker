@@ -38,7 +38,7 @@ export function attachBlock(d, force=false){
   return b;
 }
 
-export function loggedSets(block, name){ return ((block.sets||{})[name]||[]).filter(x=>x.w>0||x.r>0); }
+export function loggedSets(block, name){ return ((block.sets||{})[name]||[]).filter(x=>x.r>0); }
 export function daySetCount(d, name){ return blocks(d).reduce((a,b)=>a+loggedSets(b,name).length, 0); }
 export function blockHasContent(b){
   return Object.keys(b.sets||{}).some(n=>loggedSets(b,n).length) || (b.run && (b.run.dist||b.run.dur)) || (b.activities&&b.activities.length);
@@ -50,8 +50,11 @@ export function allExercises(){
   const seen={}, out=[];
   for (const s of Object.values(CFG.sessions)) if(s.exercises)
     for (const e of s.exercises) if(!seen[e.n]){ seen[e.n]=1; out.push(e); }
+  for (const e of (CFG.extraExercises||[])) if(!seen[e.n]){ seen[e.n]=1; out.push(e); }
   return out;
 }
+export function exDef(name){ return allExercises().find(e=>e.n===name) || null; }
+export function isBodyweight(name){ const e=exDef(name); return !!(e && e.bw); }
 // configured exercises + anything ever logged (retired program items keep their history)
 export function allLoggedExercises(){
   const names = new Set(allExercises().map(e=>e.n));
@@ -70,7 +73,7 @@ export function exHistory(name, before){
   for (const date of Object.keys(DB.workouts).sort()){
     if (before && date >= before) continue;
     const sets=[];
-    for (const b of blocks(date)) for (const x of ((b.sets||{})[name]||[])) if (x.w>0&&x.r>0) sets.push(x);
+    for (const b of blocks(date)) for (const x of ((b.sets||{})[name]||[])) if (x.r>0) sets.push(x);
     if (sets.length) out.push({date, sets});
   }
   return out;

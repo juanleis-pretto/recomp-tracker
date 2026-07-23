@@ -2,13 +2,18 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone,
-         allExercises, allLoggedExercises, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
 export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0] };
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
+
+// a set renders as "135×8" for weighted, or "12" / "45 sec" for bodyweight
+function unitOf(name){ const e=exDef(name); return e&&e.unit?" "+e.unit:""; }
+function setStr(name, x){ return isBodyweight(name) ? `${x.r}${unitOf(name)}` : `${x.w}×${x.r}`; }
+function fmtSets(name, sets){ return sets.map(x=>setStr(name,x)).join(", "); }
 
 /* ================= LOG (any day) ================= */
 export function viewToday(){
@@ -37,7 +42,7 @@ function plannedCard(d){
       const h = exHistory(ex.n);
       const last = h.length ? h[h.length-1] : null;
       const rdy = readyToProgress(ex.n);
-      return `<div class="li"><div>${esc(ex.n)}<div class="sub">${rx}${last?` · last: ${last.sets.map(x=>`${x.w}×${x.r}`).join(", ")}`:""}</div></div>
+      return `<div class="li"><div>${esc(ex.n)}<div class="sub">${rx}${last?` · last: ${fmtSets(ex.n,last.sets)}`:""}</div></div>
         ${rdy?'<span class="badge good">▲ go heavier</span>':""}</div>`;
     }).join("");
   }
@@ -63,7 +68,7 @@ function foodCard(d){
   const meals = DB.meals[d]||[];
   const t = dayTotals(d);
   const T = CFG.targets;
-  const pLeft = Math.max(0, T.protein - t.protein);
+  const pLeft = Math.round(Math.max(0, T.protein - t.protein)*10)/10;
   const isCheat = dow(d)===CFG.cheatDay;
   const lblChips = MEAL_LABELS.map(l=>`<button class="${l===S.mealLabel?'on':''}"
     onclick="pickLabel('${l}',this)">${l}</button>`).join("");
@@ -122,8 +127,11 @@ function workoutCard(d){
       const rdy = readyToProgress(ex.n);
       const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
       const rdyW = rdy ? Math.max(...rdy.sets.map(x=>x.w)) : 0;
+      const rdyMsg = rdy ? (ex.bw
+        ? `▲ you hit all ${ex.sets}×${ex.hi}${ex.unit?" "+ex.unit:""} — add reps${ex.unit?"/time":""} next time`
+        : `▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today`) : "";
       return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
-        <div>${esc(ex.n)}<div class="sub">${rx}${rdy?` · <span style="color:var(--good)">▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today</span>`:""}</div></div>
+        <div>${esc(ex.n)}<div class="sub">${rx}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}</div></div>
         <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
     }).join("");
   }
@@ -166,12 +174,14 @@ function workoutCard(d){
     const h = exHistory(S.addExSel, d);
     const last = h.length ? h[h.length-1] : null;
     const nDone = daySetCount(d, S.addExSel);
+    const bw = isBodyweight(S.addExSel);
     const pfW = last ? ((last.sets[Math.min(nDone,last.sets.length-1)]||{}).w ?? "") : "";
-    html += `<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${last.sets.map(x=>`${x.w}×${x.r}`).join(", ")}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
+    const repPh = (selRx&&selRx.unit==='sec')||unitOf(S.addExSel)===" sec" ? "sec" : "reps";
+    html += `<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
     <div class="row" style="margin-top:8px">
-      <input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}" value="${pfW}">
-      <input id="asR" class="num" inputmode="numeric" placeholder="${selRx&&selRx.unit==='sec'?'sec':'reps'}">
-      <button class="btn primary fx" onclick="addSet()">Add set</button></div>
+      ${bw?"":`<input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}" value="${pfW}">`}
+      <input id="asR" class="num" inputmode="numeric" placeholder="${repPh}">
+      <button class="btn primary fx" onclick="addSet()">Add ${bw?repPh:"set"}</button></div>
     ${joinTxt}`;
   }
 
@@ -181,8 +191,8 @@ function workoutCard(d){
     const mins = b.t0 && b.t1 ? Math.round((b.t1-b.t0)/60e3) : 0;
     const timeTxt = b.t0 && dstr(new Date(b.t0))===d ? ` · ${fmtTime(b.t0)}${b.t1&&b.t1-b.t0>60e3?`–${fmtTime(b.t1)} (${mins} min)`:""}` : "";
     let rows = Object.entries(b.sets||{}).map(([n,setsArr])=>{
-      const ss = setsArr.filter(x=>x.w>0||x.r>0); if(!ss.length) return "";
-      return `<div class="li"><div><b>${esc(n)}</b><div class="sub">${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div></div>
+      const ss = setsArr.filter(x=>x.r>0); if(!ss.length) return "";
+      return `<div class="li"><div><b>${esc(n)}</b><div class="sub">${fmtSets(n,ss)}</div></div>
         <button class="del" title="remove last set" onclick="delLastSet('${b.id}','${esc(n)}')">⌫</button></div>`;
     }).join("");
     if (b.run&&(b.run.dist||b.run.dur)) rows += `<div class="li"><div><b>Run</b><div class="sub">${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div></div></div>`;
@@ -198,7 +208,8 @@ function workoutCard(d){
 export function selEx(n){ S.addExSel=n; render(); const el=document.getElementById("asW"); if(el) el.focus(); }
 export function addSet(){
   if(!S.addExSel){ toast("Pick an exercise first"); return; }
-  const wv=num(document.getElementById("asW").value), rv=num(document.getElementById("asR").value);
+  const wEl=document.getElementById("asW");
+  const wv=wEl?num(wEl.value):0, rv=num(document.getElementById("asR").value);
   if(!rv){ toast("Enter reps"); return; }
   const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
   (b.sets[S.addExSel]=b.sets[S.addExSel]||[]).push({w:wv, r:rv});
@@ -289,8 +300,8 @@ export function viewHistory(){
     bs.forEach((b,bi)=>{
       if (bs.length>1) wo += `<div class="sub" style="margin-top:4px"><b>Workout ${bi+1}${b.t0&&dstr(new Date(b.t0))===d?" · "+fmtTime(b.t0)+(b.t1&&b.t1-b.t0>60e3?` (${Math.round((b.t1-b.t0)/60e3)} min)`:""):""}</b></div>`;
       for (const [n,arr] of Object.entries(b.sets||{})){
-        const ss = arr.filter(x=>x.w>0||x.r>0);
-        if (ss.length) wo += `<div class="sub">🏋 ${esc(n)}: ${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div>`;
+        const ss = arr.filter(x=>x.r>0);
+        if (ss.length) wo += `<div class="sub">🏋 ${esc(n)}: ${fmtSets(n,ss)}</div>`;
       }
       if (b.run&&(b.run.dist||b.run.dur)) wo += `<div class="sub">🏃 ${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div>`;
       (b.activities||[]).forEach(a=>{ wo += `<div class="sub">🎾 ${esc(a.name)}${a.dur?` · ${a.dur} min`:""}${a.kcal?` · ${a.kcal} cal`:""}${a.note?" — "+esc(a.note):""}</div>`; });
@@ -315,13 +326,13 @@ export function viewLifts(){
   const rdy = readyToProgress(S.liftSel);
   const pts = h.map(s=>[s.date, Math.round(Math.max(...s.sets.map(x=>epley(x.w,x.r)))*10)/10]);
   let html = `<div class="card"><h2>Key lift</h2><div class="seg">${seg}</div>`;
-  if (rdy) html+=`<div class="flag">▲ Ready to progress: on ${fmtShort(rdy.date)} you got ${rx.hi} reps on every set (${rdy.sets.map(x=>`${x.w}×${x.r}`).join(", ")}). Use a heavier ${CFG.units.weight==="lb"?"weight":"load"} next session.</div>`;
+  if (rdy) html+=`<div class="flag">▲ Ready to progress: on ${fmtShort(rdy.date)} you got ${rx.hi} reps on every set (${fmtSets(S.liftSel,rdy.sets)}). ${isBodyweight(S.liftSel)?"Add reps next session.":`Use a heavier ${CFG.units.weight==="lb"?"weight":"load"} next session.`}</div>`;
   html += `<h3>Estimated 1RM (Epley)</h3>`;
   html += lineChart([{pts, color:"#4da3ff", r:3, width:2}]);
   if (h.length){
     html += `<table class="hist"><tr><th>Date</th><th>Sets</th><th>Best e1RM</th></tr>`;
     for (const s of h.slice().reverse().slice(0,20))
-      html+=`<tr><td>${fmtShort(s.date)}</td><td>${s.sets.map(x=>`${x.w}×${x.r}`).join(", ")}</td><td>${bestE1RM(s.sets)}</td></tr>`;
+      html+=`<tr><td>${fmtShort(s.date)}</td><td>${fmtSets(S.liftSel,s.sets)}</td><td>${bestE1RM(s.sets)}</td></tr>`;
     html+="</table>";
   } else html += `<div class="center">Log a ${esc(S.liftSel)} session and it shows up here.</div>`;
   html += `</div>`;
@@ -329,8 +340,8 @@ export function viewLifts(){
   for (const n of allLoggedExercises()) if(!CFG.keyLifts.includes(n)){
     const hh=exHistory(n); if(!hh.length) continue;
     const lastS=hh[hh.length-1];
-    const retired = !exPrescription(n);
-    others.push(`<div class="li"><div>${esc(n)}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${lastS.sets.map(x=>`${x.w}×${x.r}`).join(", ")}</div></div>
+    const retired = !exDef(n);
+    others.push(`<div class="li"><div>${esc(n)}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${fmtSets(n,lastS.sets)}</div></div>
       ${readyToProgress(n)?'<span class="badge good">▲ progress</span>':''}</div>`);
   }
   if(others.length) html+=`<div class="card"><h2>Accessories</h2>${others.join("")}</div>`;
@@ -424,14 +435,14 @@ export function genClaude(){
     const h=exHistory(n); if(!h.length){ s+=`### ${n}\nno sessions\n`; continue; }
     const rx=exPrescription(n), rdy=readyToProgress(n);
     s+=`### ${n} (prescribed ${rx.sets}×${rx.lo}–${rx.hi})${rdy?" — READY TO PROGRESS":""}\n`;
-    for(const sess of h) s+=`${sess.date}: ${sess.sets.map(x=>`${x.w}×${x.r}`).join(", ")} | e1RM ${bestE1RM(sess.sets)}\n`;
+    for(const sess of h) s+=`${sess.date}: ${fmtSets(n,sess.sets)} | e1RM ${bestE1RM(sess.sets)}\n`;
   }
   s+="\n## Other exercises — last session each\n";
   for(const n of allLoggedExercises()) if(!CFG.keyLifts.includes(n)){
     const h=exHistory(n); if(!h.length) continue;
     const lastS=h[h.length-1];
-    const retired = !exPrescription(n);
-    s+=`${n}${retired?" [no longer in program]":""}: ${lastS.date} — ${lastS.sets.map(x=>`${x.w}×${x.r}`).join(", ")}${readyToProgress(n)?" [ready to progress]":""}\n`;
+    const retired = !exDef(n);
+    s+=`${n}${retired?" [no longer in program]":""}: ${lastS.date} — ${fmtSets(n,lastS.sets)}${readyToProgress(n)?" [ready to progress]":""}\n`;
   }
   s+="\n## Runs — last 30 days\n"; let anyRun=false;
   for(const d of days) for(const b of blocks(d))
