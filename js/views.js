@@ -69,7 +69,8 @@ function foodCard(d){
     onclick="pickLabel('${l}',this)">${l}</button>`).join("");
   const list = meals.map((m,i)=>{
     const tm = m.t && dstr(new Date(m.t))===d ? ` · ${fmtTime(m.t)}` : "";
-    return `<div class="li"><div>${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${m.cal} cal · ${m.protein}g protein${tm}</div></div>
+    const macros = m.lazy ? `not counted${tm}` : `${m.cal} cal · ${m.protein}g protein${tm}`;
+    return `<div class="li"><div>${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${macros}</div></div>
     <button class="del" onclick="delMeal(${i})">✕</button></div>`;
   }).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
@@ -82,6 +83,7 @@ function foodCard(d){
       <input id="cmCal" class="num" inputmode="decimal" placeholder="Calories">
       <input id="cmPro" class="num" inputmode="decimal" placeholder="Protein g">
       <button class="btn primary fx" onclick="addCustom()">Add</button></div>
+    <div style="margin-top:6px"><a href="#" class="muted" style="color:var(--accent)" onclick="addCustom(true);return false">+ Log meal without calories (record only)</a></div>
     ${list?`<div class="loggedlist">${list}</div>`:""}
     <div class="tot"><div class="tl"><span>Calories</span><span><b>${t.cal}</b> / ${T.cal}</span></div>
       <div class="bar"><i class="${t.cal>T.cal+60?'over':''}" style="width:${calPct}%"></i></div></div>
@@ -91,11 +93,17 @@ function foodCard(d){
   </div>`;
 }
 export function pickLabel(l, el){ S.mealLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
-export function addCustom(){
+export function addCustom(lazy){
   const n=document.getElementById("cmName").value.trim();
-  const c=num(document.getElementById("cmCal").value), p=num(document.getElementById("cmPro").value);
-  if(!n||!c){ toast("Name + calories required"); return; }
-  (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push({label:S.mealLabel, name:n, cal:c, protein:p, t:Date.now()});
+  if(!n){ toast("Meal name required"); return; }
+  const meal = { label:S.mealLabel, name:n, t:Date.now() };
+  if(lazy){ meal.lazy=true; meal.cal=0; meal.protein=0; }
+  else {
+    const c=num(document.getElementById("cmCal").value), p=num(document.getElementById("cmPro").value);
+    if(!c){ toast("Enter calories, or use record-only below"); return; }
+    meal.cal=c; meal.protein=p;
+  }
+  (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push(meal);
   Store.save(); render();
 }
 export function delMeal(i){ DB.meals[S.selDate].splice(i,1); Store.save(); render(); }
@@ -123,8 +131,9 @@ function workoutCard(d){
 
   // ---- add exercise: pick Run or a lift; inputs appear per type ----
   if (s.type==="run" && !S.addExSel) S.addExSel = "__run";
-  const opts = `<option value="" ${S.addExSel?"":"selected"} disabled>Choose: run or a lift…</option>
+  const opts = `<option value="" ${S.addExSel?"":"selected"} disabled>Choose: run, activity, or a lift…</option>
     <option value="__run" ${S.addExSel==="__run"?"selected":""}>🏃 Run</option>
+    <option value="__activity" ${S.addExSel==="__activity"?"selected":""}>🎾 Other activity (tennis, hike…)</option>
     <optgroup label="Lifts">` +
     allExercises().map(e=>`<option value="${esc(e.n)}" ${e.n===S.addExSel?"selected":""}>${esc(e.n)}</option>`).join("") +
     `</optgroup>`;
@@ -144,6 +153,14 @@ function workoutCard(d){
     <label class="fl">Note</label><input id="rNote" value="${esc(r.note??"")}" placeholder="optional">
     <div style="margin-top:10px"><button class="btn primary" onclick="saveRun()">${runB?"Update run":"Save run"}</button></div>
     ${runB?"":joinTxt}`;
+  } else if (S.addExSel === "__activity"){
+    html += `<div class="row" style="margin-top:8px">
+      <div style="flex:2"><label class="fl">Activity</label><input id="acName" placeholder="e.g. Tennis, hike, yoga"></div>
+      <div><label class="fl">Duration (min)</label><input id="acDur" class="num" inputmode="decimal" placeholder="opt."></div>
+      <div><label class="fl">Cal burned</label><input id="acCal" class="num" inputmode="decimal" placeholder="opt."></div></div>
+    <label class="fl">Note</label><input id="acNote" placeholder="optional">
+    <div style="margin-top:10px"><button class="btn primary" onclick="addActivity()">Add activity</button></div>
+    ${joinTxt}`;
   } else if (S.addExSel){
     const selRx = exPrescription(S.addExSel);
     const h = exHistory(S.addExSel, d);
@@ -169,6 +186,8 @@ function workoutCard(d){
         <button class="del" title="remove last set" onclick="delLastSet('${b.id}','${esc(n)}')">⌫</button></div>`;
     }).join("");
     if (b.run&&(b.run.dist||b.run.dur)) rows += `<div class="li"><div><b>Run</b><div class="sub">${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div></div></div>`;
+    (b.activities||[]).forEach((a,ai)=>{ rows += `<div class="li"><div><b>${esc(a.name)}</b><div class="sub">${[a.dur?a.dur+" min":"",a.kcal?a.kcal+" cal":""].filter(Boolean).join(" · ")}${a.note?" — "+esc(a.note):""}</div></div>
+      <button class="del" onclick="delActivity('${b.id}',${ai})">✕</button></div>`; });
     html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Workout ${bi+1}${timeTxt}
       <button class="btn small ${b.done?'done':''}" onclick="toggleDone('${b.id}')">${b.done?"✓ done":"mark done"}</button></h3>
     <div class="loggedlist" style="margin-top:0">${rows}</div>`;
@@ -184,6 +203,20 @@ export function addSet(){
   const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
   (b.sets[S.addExSel]=b.sets[S.addExSel]||[]).push({w:wv, r:rv});
   Store.save(); render();
+}
+export function addActivity(){
+  const name=document.getElementById("acName").value.trim();
+  if(!name){ toast("Enter an activity name"); return; }
+  const dur=num(document.getElementById("acDur").value);
+  const kcal=num(document.getElementById("acCal").value);
+  const note=document.getElementById("acNote").value.trim();
+  const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
+  (b.activities=b.activities||[]).push({name, dur, kcal, note});
+  Store.save(); render();
+}
+export function delActivity(bid, ai){
+  const b = blocks(S.selDate).find(x=>x.id===bid);
+  if(b&&b.activities){ b.activities.splice(ai,1); if(!b.activities.length) delete b.activities; Store.save(); render(); }
 }
 export function startNewWorkout(){ S._forceNew=true; toast("Next set starts a new workout"); render(); }
 export function delLastSet(bid, n){
@@ -250,7 +283,7 @@ export function viewHistory(){
   if (!list.length) return `<div class="card"><div class="center">Nothing logged yet. Log a day and it shows up here.</div></div>`;
   return list.map(d=>{
     const t = DB.meals[d]&&DB.meals[d].length ? dayTotals(d) : null;
-    const meals = (DB.meals[d]||[]).map(m=>`<div class="sub">🍽 ${m.label?esc(m.label)+": ":""}${esc(m.name)} — ${m.cal} cal / ${m.protein}g${m.t&&dstr(new Date(m.t))===d?` · ${fmtTime(m.t)}`:""}</div>`).join("");
+    const meals = (DB.meals[d]||[]).map(m=>`<div class="sub">🍽 ${m.label?esc(m.label)+": ":""}${esc(m.name)} — ${m.lazy?"not counted":`${m.cal} cal / ${m.protein}g`}${m.t&&dstr(new Date(m.t))===d?` · ${fmtTime(m.t)}`:""}</div>`).join("");
     let wo="";
     const bs = blocks(d).filter(blockHasContent);
     bs.forEach((b,bi)=>{
@@ -260,6 +293,7 @@ export function viewHistory(){
         if (ss.length) wo += `<div class="sub">🏋 ${esc(n)}: ${ss.map(x=>`${x.w}×${x.r}`).join(", ")}</div>`;
       }
       if (b.run&&(b.run.dist||b.run.dur)) wo += `<div class="sub">🏃 ${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div>`;
+      (b.activities||[]).forEach(a=>{ wo += `<div class="sub">🎾 ${esc(a.name)}${a.dur?` · ${a.dur} min`:""}${a.kcal?` · ${a.kcal} cal`:""}${a.note?" — "+esc(a.note):""}</div>`; });
     });
     const body = [DB.weight[d]!=null?`${DB.weight[d]} ${CFG.units.weight}`:null, DB.waist[d]!=null?`waist ${DB.waist[d]} ${CFG.units.waist}`:null].filter(Boolean).join(" · ");
     return `<div class="card">
@@ -382,7 +416,7 @@ export function genClaude(){
     const t=dayTotals(d); const cheat=dow(d)===CFG.cheatDay?" [cheat day]":"";
     const flag=t.protein>=T.proteinFloor?"":" ⚠ under protein floor";
     s+=`${d}: ${t.cal} cal, ${t.protein}g protein${cheat}${flag}\n`;
-    for(const m of DB.meals[d].filter(m=>!m.tid)) s+=`   ${m.label?m.label.toLowerCase()+": ":""}${m.name} (${m.cal} cal, ${m.protein}g)\n`;
+    for(const m of DB.meals[d].filter(m=>!m.tid)) s+=`   ${m.label?m.label.toLowerCase()+": ":""}${m.name} (${m.lazy?"not counted — record only":`${m.cal} cal, ${m.protein}g`})\n`;
   }
   if(!any) s+="none logged\n";
   s+="\n## Key lifts — full history (weight×reps per set, best e1RM)\n";
@@ -403,6 +437,10 @@ export function genClaude(){
   for(const d of days) for(const b of blocks(d))
     if(b.run&&(b.run.dist||b.run.dur)){ anyRun=true; s+=`${d}: ${b.run.dist||"?"} mi in ${b.run.dur||"?"} min${b.run.kcal?`, ~${b.run.kcal} cal burned`:""}${b.run.note?" — "+b.run.note:""}\n`; }
   if(!anyRun) s+="none logged\n";
+  s+="\n## Other activities — last 30 days\n"; let anyAct=false;
+  for(const d of days) for(const b of blocks(d)) for(const a of (b.activities||[])){
+    anyAct=true; s+=`${d}: ${a.name}${a.dur?`, ${a.dur} min`:""}${a.kcal?`, ~${a.kcal} cal`:""}${a.note?" — "+a.note:""}\n`; }
+  if(!anyAct) s+="none logged\n";
   let rxD=0,dnD=0; for(const d of days){ const sid=CFG.split[dow(d)];
     if(CFG.sessions[sid].type!=="rest"){ rxD++; if(dayDone(d)) dnD++; } }
   s+=`\n## Adherence (30d)\nWorkouts: ${dnD}/${rxD} prescribed sessions completed\n`;

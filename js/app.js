@@ -43,6 +43,7 @@ Object.assign(window, {
   shiftDay:V.shiftDay, setDate:V.setDate, dismiss:V.dismiss,
   pickLabel:V.pickLabel, addCustom:V.addCustom, delMeal:V.delMeal,
   selEx:V.selEx, addSet:V.addSet, startNewWorkout:V.startNewWorkout, delLastSet:V.delLastSet,
+  addActivity:V.addActivity, delActivity:V.delActivity,
   saveRun:V.saveRun, toggleDone:V.toggleDone, saveBody:V.saveBody,
   pickLift:V.pickLift,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,

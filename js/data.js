@@ -41,7 +41,7 @@ export function attachBlock(d, force=false){
 export function loggedSets(block, name){ return ((block.sets||{})[name]||[]).filter(x=>x.w>0||x.r>0); }
 export function daySetCount(d, name){ return blocks(d).reduce((a,b)=>a+loggedSets(b,name).length, 0); }
 export function blockHasContent(b){
-  return Object.keys(b.sets||{}).some(n=>loggedSets(b,n).length) || (b.run && (b.run.dist||b.run.dur));
+  return Object.keys(b.sets||{}).some(n=>loggedSets(b,n).length) || (b.run && (b.run.dist||b.run.dur)) || (b.activities&&b.activities.length);
 }
 export function dayDone(d){ return blocks(d).some(b=>b.done); }
 
