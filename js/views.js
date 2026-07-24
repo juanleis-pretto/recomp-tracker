@@ -6,7 +6,7 @@ import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, bloc
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
-export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0] };
+export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null };
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
@@ -26,8 +26,8 @@ export function viewToday(){
   if (future) return bar + plannedCard(d);
   return bar + (isToday?nags(d):"") + foodCard(d) + workoutCard(d) + bodyCard(d);
 }
-export function shiftDay(n){ const d=parseD(S.selDate); d.setDate(d.getDate()+n); S.selDate=dstr(d); S.addExSel=""; render(); }
-export function setDate(v){ if(v){ S.selDate=v; S.addExSel=""; render(); } }
+export function shiftDay(n){ const d=parseD(S.selDate); d.setDate(d.getDate()+n); S.selDate=dstr(d); S.addExSel=""; S.editMeal=null; render(); }
+export function setDate(v){ if(v){ S.selDate=v; S.addExSel=""; S.editMeal=null; render(); } }
 
 /* preview of a future day's prescribed session */
 function plannedCard(d){
@@ -73,9 +73,23 @@ function foodCard(d){
   const lblChips = MEAL_LABELS.map(l=>`<button class="${l===S.mealLabel?'on':''}"
     onclick="pickLabel('${l}',this)">${l}</button>`).join("");
   const list = meals.map((m,i)=>{
+    if (i===S.editMeal){
+      const lchips = MEAL_LABELS.map(l=>`<button class="${l===(m.label||'Other')?'on':''}" onclick="pickEditLabel('${l}',this)">${l}</button>`).join("");
+      return `<div class="li" style="display:block">
+        <div class="seg" id="editlbl" style="margin-bottom:6px">${lchips}</div>
+        <input id="emName" value="${esc(m.name)}" style="margin-bottom:6px">
+        <div class="row">
+          <input id="emCal" class="num" inputmode="decimal" value="${m.lazy?"":(m.cal??"")}" placeholder="Calories">
+          <input id="emPro" class="num" inputmode="decimal" value="${m.lazy?"":(m.protein??"")}" placeholder="Protein g"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary" onclick="saveMealEdit(${i})">Save</button>
+          <button class="btn ghost fx" onclick="cancelMealEdit()">Cancel</button></div>
+        <div class="muted" style="margin-top:4px;font-size:12px">Leave calories blank to keep it record-only.</div>
+      </div>`;
+    }
     const tm = m.t && dstr(new Date(m.t))===d ? ` · ${fmtTime(m.t)}` : "";
     const macros = m.lazy ? `not counted${tm}` : `${m.cal} cal · ${m.protein}g protein${tm}`;
-    return `<div class="li"><div>${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${macros}</div></div>
+    return `<div class="li"><div style="cursor:pointer" onclick="editMeal(${i})">${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${macros} · <span style="color:var(--accent)">edit</span></div></div>
     <button class="del" onclick="delMeal(${i})">✕</button></div>`;
   }).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
@@ -111,7 +125,23 @@ export function addCustom(lazy){
   (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push(meal);
   Store.save(); render();
 }
-export function delMeal(i){ DB.meals[S.selDate].splice(i,1); Store.save(); render(); }
+export function delMeal(i){ DB.meals[S.selDate].splice(i,1); if(S.editMeal===i) S.editMeal=null; Store.save(); render(); }
+export function editMeal(i){ S.editMeal=i; S._editLabel=(DB.meals[S.selDate][i]||{}).label||"Other"; render(); }
+export function cancelMealEdit(){ S.editMeal=null; render(); }
+export function pickEditLabel(l, el){ S._editLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
+export function saveMealEdit(i){
+  const m=DB.meals[S.selDate][i]; if(!m) return;
+  const n=document.getElementById("emName").value.trim();
+  if(!n){ toast("Meal name required"); return; }
+  m.name=n; m.label=S._editLabel||m.label;
+  const cRaw=document.getElementById("emCal").value.trim();
+  if(cRaw===""){ m.lazy=true; m.cal=0; m.protein=0; }
+  else {
+    const c=num(cRaw); if(!c){ toast("Enter calories, or clear to keep record-only"); return; }
+    delete m.lazy; m.cal=c; m.protein=num(document.getElementById("emPro").value);
+  }
+  S.editMeal=null; Store.save(); render(); toast("Updated");
+}
 
 /* ---------- workout (blocks of segments) ---------- */
 function workoutCard(d){
