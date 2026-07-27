@@ -10,6 +10,11 @@ export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftS
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
+const DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+// weekday(s) a session is scheduled for, e.g. push_b → "Friday"
+function sessionDays(sid){
+  return Object.entries(CFG.split).filter(([,v])=>v===sid).map(([k])=>DOW_NAMES[+k]).join("/");
+}
 // a set renders as "135×8" for weighted, or "12" / "45 sec" for bodyweight
 function unitOf(name){ const e=exDef(name); return e&&e.unit?" "+e.unit:""; }
 function setStr(name, x){ return isBodyweight(name) ? `${x.r}${unitOf(name)}` : `${x.w}×${x.r}`; }
@@ -174,7 +179,8 @@ function workoutCard(d){
   // make-up sessions loaded onto this day
   makeup.forEach(m=>{
     const ms = CFG.sessions[m];
-    html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Made up: ${esc(ms.name)}
+    const mday=sessionDays(m);
+    html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Made up: ${esc(ms.name)}${mday?` · ${mday}`:""}
       <a href="#" class="muted" style="color:var(--faint);font-size:12px" onclick="removeMakeup('${m}');return false">remove</a></h3>`;
     html += sessionExercisesHtml(d, ms);
   });
@@ -182,7 +188,10 @@ function workoutCard(d){
   const loadable = Object.entries(CFG.sessions).filter(([id,ss])=>ss.type!=="rest" && id!==sid && !makeup.includes(id));
   html += `<details class="cust" style="margin-top:10px"><summary>+ Make up a missed session</summary>
     <div class="muted" style="margin:4px 0 6px">Loads another day's exercise list here so you can log it with the same UI. Doesn't move your schedule.</div>
-    <div class="seg">${loadable.map(([id,ss])=>`<button onclick="addMakeup('${id}')">${esc(ss.name)}</button>`).join("")}</div>
+    <div class="mealgrid">${loadable.map(([id,ss])=>{
+      const day=sessionDays(id);
+      return `<button class="mealbtn" onclick="addMakeup('${id}')"><div class="mn">${esc(ss.name)}</div>${day?`<div class="mm">${day}</div>`:""}</button>`;
+    }).join("")}</div>
   </details>`;
 
   // ---- add exercise: pick Run or a lift; inputs appear per type ----
