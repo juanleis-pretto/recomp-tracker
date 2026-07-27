@@ -47,7 +47,7 @@ Object.assign(window, {
   addActivity:V.addActivity, delActivity:V.delActivity,
   addMakeup:V.addMakeup, removeMakeup:V.removeMakeup,
   saveRun:V.saveRun, toggleDone:V.toggleDone, saveBody:V.saveBody,
-  pickLift:V.pickLift,
+  pickLift:V.pickLift, renameEx:V.renameEx,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,
   resetAll:V.resetAll, logout:V.logout,
 });

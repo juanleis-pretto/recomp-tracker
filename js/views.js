@@ -1,7 +1,7 @@
 import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
-import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone,
+import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone, pruneEmptyBlocks,
          allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
@@ -11,6 +11,8 @@ let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
 const DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+// user-facing exercise name (respects renames); data is always keyed by the canonical name
+function dispName(name){ return (DB.aliases && DB.aliases[name]) || name; }
 // weekday(s) a session is scheduled for, e.g. push_b → "Friday"
 function sessionDays(sid){
   return Object.entries(CFG.split).filter(([,v])=>v===sid).map(([k])=>DOW_NAMES[+k]).join("/");
@@ -27,7 +29,9 @@ export function viewToday(){
     <button class="btn small fx" onclick="shiftDay(-1)">‹ prev</button>
     <input type="date" value="${d}" onchange="setDate(this.value)" style="text-align:center">
     <button class="btn small fx" onclick="shiftDay(1)">next ›</button>
-  </div>${isToday?"":`<div class="muted" style="margin-top:6px;text-align:center">${future?"Upcoming day — preview only":"Editing a past day"} — <a href="#" style="color:var(--accent)" onclick="setDate('${today()}');return false">back to today</a></div>`}</div>`;
+  </div>
+  <div style="text-align:center;margin-top:6px;font-weight:600">${DOW_NAMES[dow(d)]}${isToday?" · today":""}</div>
+  ${isToday?"":`<div class="muted" style="margin-top:2px;text-align:center">${future?"Upcoming day — preview only":"Editing a past day"} — <a href="#" style="color:var(--accent)" onclick="setDate('${today()}');return false">back to today</a></div>`}</div>`;
   if (future) return bar + plannedCard(d);
   return bar + (isToday?nags(d):"") + foodCard(d) + workoutCard(d) + bodyCard(d);
 }
@@ -47,7 +51,7 @@ function plannedCard(d){
       const h = exHistory(ex.n);
       const last = h.length ? h[h.length-1] : null;
       const rdy = readyToProgress(ex.n);
-      return `<div class="li"><div>${esc(ex.n)}<div class="sub">${rx}${last?` · last: ${fmtSets(ex.n,last.sets)}`:""}</div></div>
+      return `<div class="li"><div>${esc(dispName(ex.n))}<div class="sub">${rx}${last?` · last: ${fmtSets(ex.n,last.sets)}`:""}</div></div>
         ${rdy?'<span class="badge good">▲ go heavier</span>':""}</div>`;
     }).join("");
   }
@@ -160,8 +164,10 @@ function sessionExercisesHtml(d, s){
     const rdyMsg = rdy ? (ex.bw
       ? `▲ you hit all ${ex.sets}×${ex.hi}${ex.unit?" "+ex.unit:""} — add reps${ex.unit?"/time":""} next time`
       : `▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today`) : "";
+    const last = (exHistory(ex.n, d).slice(-1)[0]);
+    const lastTxt = last ? ` · last: ${fmtSets(ex.n,last.sets)}` : "";
     return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
-      <div>${esc(ex.n)}<div class="sub">${rx}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}</div></div>
+      <div>${esc(dispName(ex.n))}<div class="sub">${rx}${lastTxt}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}</div></div>
       <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
   }).join("");
 }
@@ -200,7 +206,7 @@ function workoutCard(d){
     <option value="__run" ${S.addExSel==="__run"?"selected":""}>🏃 Run</option>
     <option value="__activity" ${S.addExSel==="__activity"?"selected":""}>🎾 Other activity (tennis, hike…)</option>
     <optgroup label="Lifts">` +
-    allExercises().map(e=>`<option value="${esc(e.n)}" ${e.n===S.addExSel?"selected":""}>${esc(e.n)}</option>`).join("") +
+    allExercises().map(e=>`<option value="${esc(e.n)}" ${e.n===S.addExSel?"selected":""}>${esc(dispName(e.n))}</option>`).join("") +
     `</optgroup>`;
   html += `<h3>Add exercise</h3><select onchange="selEx(this.value)">${opts}</select>`;
 
@@ -223,7 +229,10 @@ function workoutCard(d){
       <div style="flex:2"><label class="fl">Activity</label><input id="acName" placeholder="e.g. Tennis, hike, yoga"></div>
       <div><label class="fl">Duration (min)</label><input id="acDur" class="num" inputmode="decimal" placeholder="opt."></div>
       <div><label class="fl">Cal burned</label><input id="acCal" class="num" inputmode="decimal" placeholder="opt."></div></div>
-    <label class="fl">Note</label><input id="acNote" placeholder="optional">
+    <div class="row" style="margin-top:8px">
+      <div style="flex:2"><label class="fl">Note</label><input id="acNote" placeholder="optional"></div>
+      <div><label class="fl">Time (opt.)</label><input id="acTime" type="time"></div></div>
+    <div class="muted" style="margin-top:4px;font-size:12px">Set a time if you did this earlier — it logs as its own workout at that time instead of joining your current one.</div>
     <div style="margin-top:10px"><button class="btn primary" onclick="addActivity()">Add activity</button></div>
     ${joinTxt}`;
   } else if (S.addExSel){
@@ -236,9 +245,10 @@ function workoutCard(d){
     const repPh = (selRx&&selRx.unit==='sec')||unitOf(S.addExSel)===" sec" ? "sec" : "reps";
     html += `<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
     <div class="row" style="margin-top:8px">
-      ${bw?"":`<input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}" value="${pfW}">`}
       <input id="asR" class="num" inputmode="numeric" placeholder="${repPh}">
+      ${bw?"":`<input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}" value="${pfW}">`}
       <button class="btn primary fx" onclick="addSet()">Add ${bw?repPh:"set"}</button></div>
+    <input id="asNote" placeholder="note (optional) — e.g. used second peg" style="margin-top:8px">
     ${joinTxt}`;
   }
 
@@ -249,7 +259,9 @@ function workoutCard(d){
     const timeTxt = b.t0 && dstr(new Date(b.t0))===d ? ` · ${fmtTime(b.t0)}${b.t1&&b.t1-b.t0>60e3?`–${fmtTime(b.t1)} (${mins} min)`:""}` : "";
     let rows = Object.entries(b.sets||{}).map(([n,setsArr])=>{
       const ss = setsArr.filter(x=>x.r>0); if(!ss.length) return "";
-      return `<div class="li"><div><b>${esc(n)}</b><div class="sub">${fmtSets(n,ss)}</div></div>
+      const notes = ss.filter(x=>x.note).map(x=>esc(x.note));
+      const noteTxt = notes.length ? `<div class="sub" style="color:var(--faint)">📝 ${notes.join(" · ")}</div>` : "";
+      return `<div class="li"><div><b>${esc(dispName(n))}</b><div class="sub">${fmtSets(n,ss)}</div>${noteTxt}</div>
         <button class="del" title="remove last set" onclick="delLastSet('${b.id}','${esc(n)}')">⌫</button></div>`;
     }).join("");
     if (b.run&&(b.run.dist||b.run.dur)) rows += `<div class="li"><div><b>Run</b><div class="sub">${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div></div></div>`;
@@ -262,29 +274,37 @@ function workoutCard(d){
   html += `</div>`;
   return html;
 }
-export function selEx(n){ S.addExSel=n; render(); const el=document.getElementById("asW"); if(el) el.focus(); }
+export function selEx(n){ S.addExSel=n; render(); const el=document.getElementById("asR"); if(el) el.focus(); }
 export function addSet(){
   if(!S.addExSel){ toast("Pick an exercise first"); return; }
   const wEl=document.getElementById("asW");
   const wv=wEl?num(wEl.value):0, rv=num(document.getElementById("asR").value);
   if(!rv){ toast("Enter reps"); return; }
+  const noteEl=document.getElementById("asNote");
+  const note=noteEl?noteEl.value.trim():"";
   const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
-  (b.sets[S.addExSel]=b.sets[S.addExSel]||[]).push({w:wv, r:rv});
+  const set={w:wv, r:rv}; if(note) set.note=note;
+  (b.sets[S.addExSel]=b.sets[S.addExSel]||[]).push(set);
   Store.save(); render();
 }
+// selDate (YYYY-MM-DD) + "HH:MM" → epoch ms
+function tsFromTime(dateStr, hhmm){ const [y,m,dd]=dateStr.split("-").map(Number); const [H,M]=hhmm.split(":").map(Number); return new Date(y,m-1,dd,H||0,M||0).getTime(); }
 export function addActivity(){
   const name=document.getElementById("acName").value.trim();
   if(!name){ toast("Enter an activity name"); return; }
   const dur=num(document.getElementById("acDur").value);
   const kcal=num(document.getElementById("acCal").value);
   const note=document.getElementById("acNote").value.trim();
-  const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
+  const timeStr=document.getElementById("acTime").value;
+  let b;
+  if(timeStr){ const ts=tsFromTime(S.selDate,timeStr); b=newBlock(S.selDate); b.t0=ts; b.t1=ts; }
+  else { b = attachBlock(S.selDate, S._forceNew); S._forceNew=false; }
   (b.activities=b.activities||[]).push({name, dur, kcal, note});
   Store.save(); render();
 }
 export function delActivity(bid, ai){
   const b = blocks(S.selDate).find(x=>x.id===bid);
-  if(b&&b.activities){ b.activities.splice(ai,1); if(!b.activities.length) delete b.activities; Store.save(); render(); }
+  if(b&&b.activities){ b.activities.splice(ai,1); if(!b.activities.length) delete b.activities; pruneEmptyBlocks(S.selDate); Store.save(); render(); }
 }
 export function addMakeup(sid){
   const arr = DB.makeup[S.selDate] = DB.makeup[S.selDate] || [];
@@ -300,7 +320,7 @@ export function removeMakeup(sid){
 export function startNewWorkout(){ S._forceNew=true; toast("Next set starts a new workout"); render(); }
 export function delLastSet(bid, n){
   const b = blocks(S.selDate).find(x=>x.id===bid);
-  if(b&&b.sets[n]){ b.sets[n].pop(); if(!b.sets[n].length) delete b.sets[n]; Store.save(); render(); }
+  if(b&&b.sets[n]){ b.sets[n].pop(); if(!b.sets[n].length) delete b.sets[n]; pruneEmptyBlocks(S.selDate); Store.save(); render(); }
 }
 export function saveRun(){
   const dist=num(document.getElementById("rDist").value);
@@ -369,7 +389,9 @@ export function viewHistory(){
       if (bs.length>1) wo += `<div class="sub" style="margin-top:4px"><b>Workout ${bi+1}${b.t0&&dstr(new Date(b.t0))===d?" · "+fmtTime(b.t0)+(b.t1&&b.t1-b.t0>60e3?` (${Math.round((b.t1-b.t0)/60e3)} min)`:""):""}</b></div>`;
       for (const [n,arr] of Object.entries(b.sets||{})){
         const ss = arr.filter(x=>x.r>0);
-        if (ss.length) wo += `<div class="sub">🏋 ${esc(n)}: ${fmtSets(n,ss)}</div>`;
+        if (!ss.length) continue;
+        const nts = ss.filter(x=>x.note).map(x=>esc(x.note)).join(" · ");
+        wo += `<div class="sub">🏋 ${esc(dispName(n))}: ${fmtSets(n,ss)}${nts?` <span style="color:var(--faint)">📝 ${nts}</span>`:""}</div>`;
       }
       if (b.run&&(b.run.dist||b.run.dur)) wo += `<div class="sub">🏃 ${b.run.dist||"?"} mi / ${b.run.dur||"?"} min${b.run.kcal?` · ${b.run.kcal} cal`:""}${b.run.note?" — "+esc(b.run.note):""}</div>`;
       (b.activities||[]).forEach(a=>{ wo += `<div class="sub">🎾 ${esc(a.name)}${a.dur?` · ${a.dur} min`:""}${a.kcal?` · ${a.kcal} cal`:""}${a.note?" — "+esc(a.note):""}</div>`; });
@@ -386,36 +408,55 @@ export function viewHistory(){
 }
 
 /* ================= LIFTS ================= */
+// notes across all sessions for an exercise: [{date, note}]
+function exNotes(name){
+  const out=[];
+  for (const date of Object.keys(DB.workouts).sort())
+    for (const b of blocks(date)) for (const x of ((b.sets||{})[name]||[])) if (x.note) out.push({date, note:x.note});
+  return out;
+}
 export function viewLifts(){
   const seg = CFG.keyLifts.map(n=>
-    `<button class="${n===S.liftSel?'on':''}" onclick="pickLift('${esc(n)}')">${esc(n.replace("Barbell ","").replace(" bench press"," bench").replace("Incline barbell","incline"))}</button>`).join("");
+    `<button class="${n===S.liftSel?'on':''}" onclick="pickLift('${esc(n)}')">${esc(dispName(n))}</button>`).join("");
   const h = exHistory(S.liftSel);
   const rx = exPrescription(S.liftSel);
   const rdy = readyToProgress(S.liftSel);
   const pts = h.map(s=>[s.date, Math.round(Math.max(...s.sets.map(x=>epley(x.w,x.r)))*10)/10]);
-  let html = `<div class="card"><h2>Key lift</h2><div class="seg">${seg}</div>`;
+  let html = `<div class="card"><h2 style="display:flex;justify-content:space-between;align-items:center">Key lift
+    <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="renameEx('${esc(S.liftSel)}');return false">rename</a></h2><div class="seg">${seg}</div>`;
   if (rdy) html+=`<div class="flag">▲ Ready to progress: on ${fmtShort(rdy.date)} you got ${rx.hi} reps on every set (${fmtSets(S.liftSel,rdy.sets)}). ${isBodyweight(S.liftSel)?"Add reps next session.":`Use a heavier ${CFG.units.weight==="lb"?"weight":"load"} next session.`}</div>`;
   html += `<h3>Estimated 1RM (Epley)</h3>`;
   html += lineChart([{pts, color:"#4da3ff", r:3, width:2}]);
   if (h.length){
     html += `<table class="hist"><tr><th>Date</th><th>Sets</th><th>Best e1RM</th></tr>`;
-    for (const s of h.slice().reverse().slice(0,20))
-      html+=`<tr><td>${fmtShort(s.date)}</td><td>${fmtSets(S.liftSel,s.sets)}</td><td>${bestE1RM(s.sets)}</td></tr>`;
+    for (const s of h.slice().reverse().slice(0,20)){
+      const notes=s.sets.filter(x=>x.note).map(x=>esc(x.note)).join(" · ");
+      html+=`<tr><td>${fmtShort(s.date)}</td><td>${fmtSets(S.liftSel,s.sets)}${notes?`<div style="color:var(--faint);font-size:11px">📝 ${notes}</div>`:""}</td><td>${bestE1RM(s.sets)}</td></tr>`;
+    }
     html+="</table>";
-  } else html += `<div class="center">Log a ${esc(S.liftSel)} session and it shows up here.</div>`;
+  } else html += `<div class="center">Log a ${esc(dispName(S.liftSel))} session and it shows up here.</div>`;
   html += `</div>`;
   const others=[];
   for (const n of allLoggedExercises()) if(!CFG.keyLifts.includes(n)){
     const hh=exHistory(n); if(!hh.length) continue;
     const lastS=hh[hh.length-1];
     const retired = !exDef(n);
-    others.push(`<div class="li"><div>${esc(n)}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${fmtSets(n,lastS.sets)}</div></div>
-      ${readyToProgress(n)?'<span class="badge good">▲ progress</span>':''}</div>`);
+    others.push(`<div class="li"><div>${esc(dispName(n))}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${fmtSets(n,lastS.sets)}</div></div>
+      <div style="display:flex;gap:8px;align-items:center">${readyToProgress(n)?'<span class="badge good">▲ progress</span>':''}<a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="renameEx('${esc(n)}');return false">rename</a></div></div>`);
   }
   if(others.length) html+=`<div class="card"><h2>Accessories</h2>${others.join("")}</div>`;
   return html;
 }
 export function pickLift(n){ S.liftSel=n; render(); }
+export function renameEx(name){
+  const cur=dispName(name);
+  const v=prompt(`Rename "${cur}" (display only — history is kept):`, cur);
+  if(v==null) return;
+  const t=v.trim();
+  if(!t || t===name){ delete DB.aliases[name]; }
+  else DB.aliases[name]=t;
+  Store.save(); render();
+}
 
 /* ================= TRENDS ================= */
 export function viewTrends(){
@@ -500,17 +541,21 @@ export function genClaude(){
   if(!any) s+="none logged\n";
   s+="\n## Key lifts — full history (weight×reps per set, best e1RM)\n";
   for(const n of CFG.keyLifts){
-    const h=exHistory(n); if(!h.length){ s+=`### ${n}\nno sessions\n`; continue; }
+    const h=exHistory(n); if(!h.length){ s+=`### ${dispName(n)}\nno sessions\n`; continue; }
     const rx=exPrescription(n), rdy=readyToProgress(n);
-    s+=`### ${n} (prescribed ${rx.sets}×${rx.lo}–${rx.hi})${rdy?" — READY TO PROGRESS":""}\n`;
-    for(const sess of h) s+=`${sess.date}: ${fmtSets(n,sess.sets)} | e1RM ${bestE1RM(sess.sets)}\n`;
+    s+=`### ${dispName(n)} (prescribed ${rx.sets}×${rx.lo}–${rx.hi})${rdy?" — READY TO PROGRESS":""}\n`;
+    for(const sess of h){
+      const notes=sess.sets.filter(x=>x.note).map(x=>x.note).join("; ");
+      s+=`${sess.date}: ${fmtSets(n,sess.sets)} | e1RM ${bestE1RM(sess.sets)}${notes?` | notes: ${notes}`:""}\n`;
+    }
   }
   s+="\n## Other exercises — last session each\n";
   for(const n of allLoggedExercises()) if(!CFG.keyLifts.includes(n)){
     const h=exHistory(n); if(!h.length) continue;
     const lastS=h[h.length-1];
     const retired = !exDef(n);
-    s+=`${n}${retired?" [no longer in program]":""}: ${lastS.date} — ${fmtSets(n,lastS.sets)}${readyToProgress(n)?" [ready to progress]":""}\n`;
+    const anotes=lastS.sets.filter(x=>x.note).map(x=>x.note).join("; ");
+    s+=`${dispName(n)}${retired?" [no longer in program]":""}: ${lastS.date} — ${fmtSets(n,lastS.sets)}${anotes?` | notes: ${anotes}`:""}${readyToProgress(n)?" [ready to progress]":""}\n`;
   }
   s+="\n## Runs — last 30 days\n"; let anyRun=false;
   for(const d of days) for(const b of blocks(d))

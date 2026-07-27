@@ -39,6 +39,12 @@ export function attachBlock(d, force=false){
 }
 
 export function loggedSets(block, name){ return ((block.sets||{})[name]||[]).filter(x=>x.r>0); }
+// drop blocks that have nothing in them (fixes stale workout start-times after deletes)
+export function pruneEmptyBlocks(d){
+  if(!DB.workouts[d]) return;
+  DB.workouts[d] = DB.workouts[d].filter(b => blockHasContent(b) || b.done);
+  if(!DB.workouts[d].length) delete DB.workouts[d];
+}
 export function daySetCount(d, name){ return blocks(d).reduce((a,b)=>a+loggedSets(b,name).length, 0); }
 export function blockHasContent(b){
   return Object.keys(b.sets||{}).some(n=>loggedSets(b,n).length) || (b.run && (b.run.dist||b.run.dur)) || (b.activities&&b.activities.length);
