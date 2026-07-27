@@ -45,6 +45,7 @@ Object.assign(window, {
   editMeal:V.editMeal, cancelMealEdit:V.cancelMealEdit, pickEditLabel:V.pickEditLabel, saveMealEdit:V.saveMealEdit,
   selEx:V.selEx, addSet:V.addSet, startNewWorkout:V.startNewWorkout, delLastSet:V.delLastSet,
   addActivity:V.addActivity, delActivity:V.delActivity,
+  addMakeup:V.addMakeup, removeMakeup:V.removeMakeup,
   saveRun:V.saveRun, toggleDone:V.toggleDone, saveBody:V.saveBody,
   pickLift:V.pickLift,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,

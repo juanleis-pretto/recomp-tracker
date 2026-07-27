@@ -1,5 +1,5 @@
 import { CFG, MEAL_LABELS } from "./config.js";
-import { DB, Store } from "./store.js";
+import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone,
          allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
@@ -144,31 +144,49 @@ export function saveMealEdit(i){
 }
 
 /* ---------- workout (blocks of segments) ---------- */
+function sessionExercisesHtml(d, s){
+  if (s.type==="run") return `<div class="muted">${esc(s.detail)}</div>`;
+  if (s.type!=="lift") return "";
+  return s.exercises.map(ex=>{
+    const done = daySetCount(d, ex.n);
+    const rdy = readyToProgress(ex.n);
+    const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
+    const rdyW = rdy ? Math.max(...rdy.sets.map(x=>x.w)) : 0;
+    const rdyMsg = rdy ? (ex.bw
+      ? `▲ you hit all ${ex.sets}×${ex.hi}${ex.unit?" "+ex.unit:""} — add reps${ex.unit?"/time":""} next time`
+      : `▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today`) : "";
+    return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
+      <div>${esc(ex.n)}<div class="sub">${rx}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}</div></div>
+      <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
+  }).join("");
+}
 function workoutCard(d){
   const sid = CFG.split[dow(d)];
   const s = CFG.sessions[sid];
   const arr = blocks(d);
-  let html = `<div class="card"><h2>Workout${s.type!=="rest"?` — prescribed: ${esc(s.name)}`:""}</h2>`;
-  if (s.type==="rest") html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
+  const makeup = (DB.makeup[d]||[]).filter(m=>CFG.sessions[m]);
+  const anyLiftShown = s.type==="lift" || makeup.some(m=>CFG.sessions[m].type==="lift");
+  const names = [s.type!=="rest"?s.name:null, ...makeup.map(m=>CFG.sessions[m].name)].filter(Boolean);
+  let html = `<div class="card"><h2>Workout${names.length?` — ${esc(names.join(" + "))}`:""}</h2>`;
+  if (s.type==="rest" && !makeup.length) html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
 
-  if (s.type==="lift"){
-    html += s.exercises.map(ex=>{
-      const done = daySetCount(d, ex.n);
-      const rdy = readyToProgress(ex.n);
-      const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
-      const rdyW = rdy ? Math.max(...rdy.sets.map(x=>x.w)) : 0;
-      const rdyMsg = rdy ? (ex.bw
-        ? `▲ you hit all ${ex.sets}×${ex.hi}${ex.unit?" "+ex.unit:""} — add reps${ex.unit?"/time":""} next time`
-        : `▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today`) : "";
-      return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
-        <div>${esc(ex.n)}<div class="sub">${rx}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}</div></div>
-        <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
-    }).join("");
-  }
-  if (s.type==="run") html += `<div class="muted">${esc(s.detail)}</div>`;
+  html += sessionExercisesHtml(d, s);
+  // make-up sessions loaded onto this day
+  makeup.forEach(m=>{
+    const ms = CFG.sessions[m];
+    html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Made up: ${esc(ms.name)}
+      <a href="#" class="muted" style="color:var(--faint);font-size:12px" onclick="removeMakeup('${m}');return false">remove</a></h3>`;
+    html += sessionExercisesHtml(d, ms);
+  });
+  // control to load a missed session's reference list onto this day
+  const loadable = Object.entries(CFG.sessions).filter(([id,ss])=>ss.type!=="rest" && id!==sid && !makeup.includes(id));
+  html += `<details class="cust" style="margin-top:10px"><summary>+ Make up a missed session</summary>
+    <div class="muted" style="margin:4px 0 6px">Loads another day's exercise list here so you can log it with the same UI. Doesn't move your schedule.</div>
+    <div class="seg">${loadable.map(([id,ss])=>`<button onclick="addMakeup('${id}')">${esc(ss.name)}</button>`).join("")}</div>
+  </details>`;
 
   // ---- add exercise: pick Run or a lift; inputs appear per type ----
-  if (s.type==="run" && !S.addExSel) S.addExSel = "__run";
+  if (s.type==="run" && !anyLiftShown && !S.addExSel) S.addExSel = "__run";
   const opts = `<option value="" ${S.addExSel?"":"selected"} disabled>Choose: run, activity, or a lift…</option>
     <option value="__run" ${S.addExSel==="__run"?"selected":""}>🏃 Run</option>
     <option value="__activity" ${S.addExSel==="__activity"?"selected":""}>🎾 Other activity (tennis, hike…)</option>
@@ -258,6 +276,17 @@ export function addActivity(){
 export function delActivity(bid, ai){
   const b = blocks(S.selDate).find(x=>x.id===bid);
   if(b&&b.activities){ b.activities.splice(ai,1); if(!b.activities.length) delete b.activities; Store.save(); render(); }
+}
+export function addMakeup(sid){
+  const arr = DB.makeup[S.selDate] = DB.makeup[S.selDate] || [];
+  if(!arr.includes(sid)) arr.push(sid);
+  Store.save(); render(); toast(`Loaded ${CFG.sessions[sid].name}`);
+}
+export function removeMakeup(sid){
+  const arr = DB.makeup[S.selDate]; if(!arr) return;
+  const i = arr.indexOf(sid); if(i>=0) arr.splice(i,1);
+  if(!arr.length) delete DB.makeup[S.selDate];
+  Store.save(); render();
 }
 export function startNewWorkout(){ S._forceNew=true; toast("Next set starts a new workout"); render(); }
 export function delLastSet(bid, n){
@@ -507,7 +536,7 @@ export function impJSON(inp){
       const j = JSON.parse(txt); const doc = j.data || j;
       if (!doc.meals && !doc.workouts) throw 0;
       if (!confirm("Replace ALL current data with this file (local + server)?")) return;
-      for (const k of ["meals","workouts","weight","waist","photos","dismissed"]) DB[k] = doc[k] || {};
+      for (const k of DOC_KEYS) DB[k] = doc[k] || {};
       Store.migrate(DB);
       Store.save(); render(); toast("Imported");
     } catch(e){ toast("Not a valid export file"); }
@@ -515,7 +544,7 @@ export function impJSON(inp){
 }
 export function resetAll(){
   if (!confirm("Erase ALL logged data? This wipes this device AND the server copy.")) return;
-  for (const k of ["meals","workouts","weight","waist","photos","dismissed"]) DB[k] = {};
+  for (const k of DOC_KEYS) DB[k] = {};
   Store.save(); localStorage.removeItem(Store.DIRTY); render();
 }
 export function logout(){ Store.logout(); }
