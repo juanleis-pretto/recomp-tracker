@@ -118,6 +118,7 @@ function foodCard(d){
     <div class="tot"><div class="tl"><span>Protein</span><span><b>${t.protein}g</b> / ${T.protein}g</span></div>
       <div class="bar"><i class="${t.protein>=T.proteinFloor?'good':''}" style="width:${pPct}%"></i></div>
       <div class="hint">${pLeft>0?pLeft+"g protein left to hit target"+(t.protein>=T.proteinFloor?" (floor of "+T.proteinFloor+"g met ✓)":""):"Protein target hit ✓"}</div></div>
+    <div style="margin-top:12px"><button class="btn ${DB.mealsDone[d]?'done':''}" style="width:100%" onclick="toggleMealsDone()">${DB.mealsDone[d]?"✓ All meals logged for the day":"Mark all meals logged"}</button></div>
   </div>`;
 }
 export function pickLabel(l, el){ S.mealLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
@@ -135,6 +136,7 @@ export function addCustom(lazy){
   Store.save(); render();
 }
 export function delMeal(i){ DB.meals[S.selDate].splice(i,1); if(S.editMeal===i) S.editMeal=null; Store.save(); render(); }
+export function toggleMealsDone(){ const d=S.selDate; if(DB.mealsDone[d]) delete DB.mealsDone[d]; else DB.mealsDone[d]=1; Store.save(); render(); }
 export function editMeal(i){ S.editMeal=i; S._editLabel=(DB.meals[S.selDate][i]||{}).label||"Other"; render(); }
 export function cancelMealEdit(){ S.editMeal=null; render(); }
 export function pickEditLabel(l, el){ S._editLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
@@ -166,8 +168,9 @@ function sessionExercisesHtml(d, s){
       : `▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today`) : "";
     const last = (exHistory(ex.n, d).slice(-1)[0]);
     const lastTxt = last ? ` · last: ${fmtSets(ex.n,last.sets)}` : "";
+    const pin = DB.exNotes[ex.n];
     return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
-      <div>${esc(dispName(ex.n))}<div class="sub">${rx}${lastTxt}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}</div></div>
+      <div>${esc(dispName(ex.n))}<div class="sub">${rx}${lastTxt}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}${pin?`<div style="color:var(--warn)">📌 ${esc(pin)}</div>`:""}</div></div>
       <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
   }).join("");
 }
@@ -239,16 +242,16 @@ function workoutCard(d){
     const selRx = exPrescription(S.addExSel);
     const h = exHistory(S.addExSel, d);
     const last = h.length ? h[h.length-1] : null;
-    const nDone = daySetCount(d, S.addExSel);
     const bw = isBodyweight(S.addExSel);
-    const pfW = last ? ((last.sets[Math.min(nDone,last.sets.length-1)]||{}).w ?? "") : "";
     const repPh = (selRx&&selRx.unit==='sec')||unitOf(S.addExSel)===" sec" ? "sec" : "reps";
+    const pin = DB.exNotes[S.addExSel];
     html += `<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
+    <div style="margin:2px 0 4px"><span style="color:var(--warn)">📌 ${pin?esc(pin):'<span class="muted">no pinned note</span>'}</span> · <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="setExNote('${esc(S.addExSel)}');return false">${pin?"edit":"add"} pinned note</a></div>
     <div class="row" style="margin-top:8px">
+      ${bw?"":`<input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}">`}
       <input id="asR" class="num" inputmode="numeric" placeholder="${repPh}">
-      ${bw?"":`<input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}" value="${pfW}">`}
       <button class="btn primary fx" onclick="addSet()">Add ${bw?repPh:"set"}</button></div>
-    <input id="asNote" placeholder="note (optional) — e.g. used second peg" style="margin-top:8px">
+    <input id="asNote" placeholder="note for this set (optional)" style="margin-top:8px">
     ${joinTxt}`;
   }
 
@@ -274,7 +277,15 @@ function workoutCard(d){
   html += `</div>`;
   return html;
 }
-export function selEx(n){ S.addExSel=n; render(); const el=document.getElementById("asR"); if(el) el.focus(); }
+export function selEx(n){ S.addExSel=n; render(); const el=document.getElementById("asW")||document.getElementById("asR"); if(el) el.focus(); }
+export function setExNote(name){
+  const cur=DB.exNotes[name]||"";
+  const v=prompt(`Pinned note for "${dispName(name)}" (e.g. use notch 2):`, cur);
+  if(v==null) return;
+  const t=v.trim();
+  if(t) DB.exNotes[name]=t; else delete DB.exNotes[name];
+  Store.save(); render();
+}
 export function addSet(){
   if(!S.addExSel){ toast("Pick an exercise first"); return; }
   const wEl=document.getElementById("asW");
@@ -400,7 +411,7 @@ export function viewHistory(){
     return `<div class="card">
       <h2 style="display:flex;justify-content:space-between;align-items:center">${fmtLong(d)}
         <button class="btn small" onclick="setDate('${d}');go('today')">Edit day</button></h2>
-      ${t?`<div style="font-size:14px;margin-bottom:6px"><b>${t.cal}</b> cal · <b>${t.protein}g</b> protein${dayDone(d)?' · <span style="color:var(--good)">workout ✓</span>':""}</div>`:""}
+      ${t?`<div style="font-size:14px;margin-bottom:6px"><b>${t.cal}</b> cal · <b>${t.protein}g</b> protein${DB.mealsDone[d]?' <span style="color:var(--good)">✓</span>':""}${dayDone(d)?' · <span style="color:var(--good)">workout ✓</span>':""}</div>`:""}
       ${meals}${wo}
       ${body?`<div class="sub" style="margin-top:4px">⚖ ${body}</div>`:""}
     </div>`;
@@ -422,8 +433,10 @@ export function viewLifts(){
   const rx = exPrescription(S.liftSel);
   const rdy = readyToProgress(S.liftSel);
   const pts = h.map(s=>[s.date, Math.round(Math.max(...s.sets.map(x=>epley(x.w,x.r)))*10)/10]);
+  const pin = DB.exNotes[S.liftSel];
   let html = `<div class="card"><h2 style="display:flex;justify-content:space-between;align-items:center">Key lift
-    <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="renameEx('${esc(S.liftSel)}');return false">rename</a></h2><div class="seg">${seg}</div>`;
+    <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="renameEx('${esc(S.liftSel)}');return false">rename</a></h2><div class="seg">${seg}</div>
+    <div style="margin:6px 0"><span style="color:var(--warn)">📌 ${pin?esc(pin):'<span class="muted">no pinned note</span>'}</span> · <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="setExNote('${esc(S.liftSel)}');return false">${pin?"edit":"add"} pinned note</a></div>`;
   if (rdy) html+=`<div class="flag">▲ Ready to progress: on ${fmtShort(rdy.date)} you got ${rx.hi} reps on every set (${fmtSets(S.liftSel,rdy.sets)}). ${isBodyweight(S.liftSel)?"Add reps next session.":`Use a heavier ${CFG.units.weight==="lb"?"weight":"load"} next session.`}</div>`;
   html += `<h3>Estimated 1RM (Epley)</h3>`;
   html += lineChart([{pts, color:"#4da3ff", r:3, width:2}]);
@@ -441,8 +454,9 @@ export function viewLifts(){
     const hh=exHistory(n); if(!hh.length) continue;
     const lastS=hh[hh.length-1];
     const retired = !exDef(n);
-    others.push(`<div class="li"><div>${esc(dispName(n))}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${fmtSets(n,lastS.sets)}</div></div>
-      <div style="display:flex;gap:8px;align-items:center">${readyToProgress(n)?'<span class="badge good">▲ progress</span>':''}<a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="renameEx('${esc(n)}');return false">rename</a></div></div>`);
+    const apin = DB.exNotes[n];
+    others.push(`<div class="li"><div>${esc(dispName(n))}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${fmtSets(n,lastS.sets)}</div>${apin?`<div class="sub" style="color:var(--warn)">📌 ${esc(apin)}</div>`:""}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex:none">${readyToProgress(n)?'<span class="badge good">▲</span>':''}<a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="setExNote('${esc(n)}');return false">📌</a><a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="renameEx('${esc(n)}');return false">rename</a></div></div>`);
   }
   if(others.length) html+=`<div class="card"><h2>Accessories</h2>${others.join("")}</div>`;
   return html;
@@ -535,7 +549,8 @@ export function genClaude(){
   for(const d of days){ if(!DB.meals[d]||!DB.meals[d].length) continue; any=true;
     const t=dayTotals(d); const cheat=dow(d)===CFG.cheatDay?" [cheat day]":"";
     const flag=t.protein>=T.proteinFloor?"":" ⚠ under protein floor";
-    s+=`${d}: ${t.cal} cal, ${t.protein}g protein${cheat}${flag}\n`;
+    const complete=DB.mealsDone[d]?" [all meals logged]":" [may be incomplete]";
+    s+=`${d}: ${t.cal} cal, ${t.protein}g protein${cheat}${flag}${complete}\n`;
     for(const m of DB.meals[d].filter(m=>!m.tid)) s+=`   ${m.label?m.label.toLowerCase()+": ":""}${m.name} (${m.lazy?"not counted — record only":`${m.cal} cal, ${m.protein}g`})\n`;
   }
   if(!any) s+="none logged\n";
