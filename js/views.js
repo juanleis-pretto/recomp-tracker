@@ -51,7 +51,7 @@ function plannedCard(d){
       const h = exHistory(ex.n);
       const last = h.length ? h[h.length-1] : null;
       const rdy = readyToProgress(ex.n);
-      return `<div class="li"><div>${esc(dispName(ex.n))}<div class="sub">${rx}${last?` · last: ${fmtSets(ex.n,last.sets)}`:""}</div></div>
+      return `<div class="li"><div>${esc(dispName(ex.n))}${ex.mus?`<div class="sub" style="color:var(--faint)">💪 ${esc(ex.mus)}</div>`:""}<div class="sub">${rx}${last?` · last: ${fmtSets(ex.n,last.sets)}`:""}</div></div>
         ${rdy?'<span class="badge good">▲ go heavier</span>':""}</div>`;
     }).join("");
   }
@@ -170,7 +170,7 @@ function sessionExercisesHtml(d, s){
     const lastTxt = last ? ` · last: ${fmtSets(ex.n,last.sets)}` : "";
     const pin = DB.exNotes[ex.n];
     return `<div class="li" style="cursor:pointer" onclick="selEx('${esc(ex.n)}')">
-      <div>${esc(dispName(ex.n))}<div class="sub">${rx}${lastTxt}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}${pin?`<div style="color:var(--warn)">📌 ${esc(pin)}</div>`:""}</div></div>
+      <div>${esc(dispName(ex.n))}${ex.mus?`<div class="sub" style="color:var(--faint)">💪 ${esc(ex.mus)}</div>`:""}<div class="sub">${rx}${lastTxt}${rdy?` · <span style="color:var(--good)">${rdyMsg}</span>`:""}${pin?`<div style="color:var(--warn)">📌 ${esc(pin)}</div>`:""}</div></div>
       <span class="badge ${done>=ex.sets?'good':''}">${done}/${ex.sets} sets</span></div>`;
   }).join("");
 }
@@ -245,7 +245,9 @@ function workoutCard(d){
     const bw = isBodyweight(S.addExSel);
     const repPh = (selRx&&selRx.unit==='sec')||unitOf(S.addExSel)===" sec" ? "sec" : "reps";
     const pin = DB.exNotes[S.addExSel];
-    html += `<div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
+    const exd = exDef(S.addExSel);
+    html += `${exd&&exd.mus?`<div class="muted" style="color:var(--faint);margin-top:4px">💪 ${esc(exd.mus)}</div>`:""}
+    <div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
     <div style="margin:2px 0 4px"><span style="color:var(--warn)">📌 ${pin?esc(pin):'<span class="muted">no pinned note</span>'}</span> · <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="setExNote('${esc(S.addExSel)}');return false">${pin?"edit":"add"} pinned note</a></div>
     <div class="row" style="margin-top:8px">
       ${bw?"":`<input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}">`}
