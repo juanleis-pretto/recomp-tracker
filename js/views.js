@@ -11,6 +11,16 @@ let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
 const DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+// unique muscles across a list of exercises, in first-seen order
+function aggMuscles(exList){
+  const order=[], seen=new Set();
+  for(const ex of exList) if(ex&&ex.mus) for(const m of ex.mus.split(",").map(s=>s.trim())) if(m&&!seen.has(m)){ seen.add(m); order.push(m); }
+  return order;
+}
+function musclesSummary(exList){
+  const ms=aggMuscles(exList);
+  return ms.length ? `<div class="muted" style="margin:2px 0 8px"><span style="color:var(--faint)">💪 Targets:</span> ${esc(ms.join(", "))}</div>` : "";
+}
 // user-facing exercise name (respects renames); data is always keyed by the canonical name
 function dispName(name){ return (DB.aliases && DB.aliases[name]) || name; }
 // weekday(s) a session is scheduled for, e.g. push_b → "Friday"
@@ -46,6 +56,7 @@ function plannedCard(d){
   if (s.type==="rest") html += `<div class="center">Rest day. Nothing on the calendar.</div>`;
   else if (s.type==="run") html += `<div class="muted">${esc(s.detail)}</div>`;
   else {
+    html += musclesSummary(s.exercises);
     html += s.exercises.map(ex=>{
       const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
       const h = exHistory(ex.n);
@@ -184,6 +195,8 @@ function workoutCard(d){
   let html = `<div class="card"><h2>Workout${names.length?` — ${esc(names.join(" + "))}`:""}</h2>`;
   if (s.type==="rest" && !makeup.length) html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
 
+  const allEx = [...(s.exercises||[]), ...makeup.flatMap(m=>CFG.sessions[m].exercises||[])];
+  html += musclesSummary(allEx);
   html += sessionExercisesHtml(d, s);
   // make-up sessions loaded onto this day
   makeup.forEach(m=>{
