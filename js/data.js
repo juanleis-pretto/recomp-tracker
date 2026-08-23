@@ -1,6 +1,6 @@
 import { CFG } from "./config.js";
 import { DB } from "./store.js";
-import { today, epley } from "./util.js";
+import { today, dow, epley } from "./util.js";
 
 /* ---------- nutrition ---------- */
 export function dayTotals(date){
@@ -49,7 +49,15 @@ export function daySetCount(d, name){ return blocks(d).reduce((a,b)=>a+loggedSet
 export function blockHasContent(b){
   return Object.keys(b.sets||{}).some(n=>loggedSets(b,n).length) || (b.run && (b.run.dist||b.run.dur)) || (b.activities&&b.activities.length);
 }
-export function dayDone(d){ return blocks(d).some(b=>b.done); }
+// did the day's own prescribed session get logged in full — every exercise at its prescribed set
+// count, or any run data for a run day? Used for adherence stats instead of a manual toggle.
+export function sessionCompleted(d){
+  const s = CFG.sessions[CFG.split[dow(d)]];
+  if (!s || s.type==="rest") return false;
+  if (s.type==="run") return blocks(d).some(b=>b.run && (b.run.dist||b.run.dur));
+  if (s.type==="lift") return s.exercises.every(ex=>daySetCount(d, ex.n) >= ex.sets);
+  return false;
+}
 
 /* ---------- exercise catalog & progression ---------- */
 export function allExercises(){

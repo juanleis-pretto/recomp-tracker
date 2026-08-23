@@ -2,7 +2,7 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, sessionCompleted } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
@@ -525,9 +525,9 @@ export function viewTrends(){
   let rxDays=0, doneDays=0, floorDays=0, calSum=0, calN=0, fullyLoggedDays=0;
   for (const d of days){
     const sid=CFG.split[dow(d)];
-    // "completed" = actually logged content that day, not the manual done-toggle — the toggle is
-    // easy to forget to click and was making this undercount real workouts
-    if (CFG.sessions[sid].type!=="rest" && d<=today()){ rxDays++; if(blocks(d).some(blockHasContent)) doneDays++; }
+    // "completed" = every prescribed exercise logged at its full set count that day, not a manual
+    // toggle — the toggle is easy to forget to click and was making this undercount real workouts
+    if (CFG.sessions[sid].type!=="rest" && d<=today()){ rxDays++; if(sessionCompleted(d)) doneDays++; }
     if (DB.meals[d]&&DB.meals[d].length){ const t=dayTotals(d); calSum+=t.cal; calN++; if(t.protein>=T.proteinFloor) floorDays++; }
     if (DB.mealsDone[d]) fullyLoggedDays++;
   }
@@ -606,7 +606,7 @@ export function genClaude(){
     anyAct=true; s+=`${d}: ${a.name}${a.dur?`, ${a.dur} min`:""}${a.kcal?`, ~${a.kcal} cal`:""}${a.note?" — "+a.note:""}\n`; }
   if(!anyAct) s+="none logged\n";
   let rxD=0,dnD=0; for(const d of days){ const sid=CFG.split[dow(d)];
-    if(CFG.sessions[sid].type!=="rest"){ rxD++; if(blocks(d).some(blockHasContent)) dnD++; } }
+    if(CFG.sessions[sid].type!=="rest"){ rxD++; if(sessionCompleted(d)) dnD++; } }
   s+=`\n## Adherence (30d)\nWorkouts: ${dnD}/${rxD} prescribed sessions completed\n`;
   s+=`\nQuestions for you, Claude: Am I on track for the recomp goals? Which lifts are stalling? Any adjustments to calories, protein, or the program?\n`;
   document.getElementById("claudeOut").value=s;
