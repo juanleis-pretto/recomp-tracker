@@ -2,7 +2,7 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, sessionCompleted } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
@@ -522,17 +522,14 @@ export function viewTrends(){
   html+=`<div class="card"><h2>Calories — last 30 days vs ${T.cal} target</h2>
     ${barChart(days,cal,{target:T.cal,floorMode:"above",cheatDow:CFG.cheatDay})}
     <div class="muted">Purple bars are Fridays — cheat meal is part of the plan, not a failure.</div></div>`;
-  let rxDays=0, doneDays=0, floorDays=0, calSum=0, calN=0, fullyLoggedDays=0;
+  const adh = adherence(days.filter(d=>d<=today()));
+  let floorDays=0, calSum=0, calN=0, fullyLoggedDays=0;
   for (const d of days){
-    const sid=CFG.split[dow(d)];
-    // "completed" = every prescribed exercise logged at its full set count that day, not a manual
-    // toggle — the toggle is easy to forget to click and was making this undercount real workouts
-    if (CFG.sessions[sid].type!=="rest" && d<=today()){ rxDays++; if(sessionCompleted(d)) doneDays++; }
     if (DB.meals[d]&&DB.meals[d].length){ const t=dayTotals(d); calSum+=t.cal; calN++; if(t.protein>=T.proteinFloor) floorDays++; }
     if (DB.mealsDone[d]) fullyLoggedDays++;
   }
   html+=`<div class="card"><h2>Adherence — last 30 days</h2><div class="stat">
-    <div class="s"><div class="v">${doneDays}/${rxDays}</div><div class="k">workouts completed vs prescribed</div></div>
+    <div class="s"><div class="v">${adh.got}/${adh.need}</div><div class="k">workouts completed vs prescribed</div></div>
     <div class="s"><div class="v">${floorDays}/${calN||0}</div><div class="k">logged days hitting ${T.proteinFloor}g protein floor</div></div>
     <div class="s"><div class="v">${calN?Math.round(calSum/calN):"—"}</div><div class="k">avg daily calories (target ${T.cal})</div></div>
     <div class="s"><div class="v">${fullyLoggedDays}</div><div class="k">days with food fully logged</div></div>
@@ -605,9 +602,8 @@ export function genClaude(){
   for(const d of days) for(const b of blocks(d)) for(const a of (b.activities||[])){
     anyAct=true; s+=`${d}: ${a.name}${a.dur?`, ${a.dur} min`:""}${a.kcal?`, ~${a.kcal} cal`:""}${a.note?" — "+a.note:""}\n`; }
   if(!anyAct) s+="none logged\n";
-  let rxD=0,dnD=0; for(const d of days){ const sid=CFG.split[dow(d)];
-    if(CFG.sessions[sid].type!=="rest"){ rxD++; if(sessionCompleted(d)) dnD++; } }
-  s+=`\n## Adherence (30d)\nWorkouts: ${dnD}/${rxD} prescribed sessions completed\n`;
+  const adhExport = adherence(days.filter(d=>d<=today()));
+  s+=`\n## Adherence (30d)\nWorkouts: ${adhExport.got}/${adhExport.need} prescribed sessions completed\n`;
   s+=`\nQuestions for you, Claude: Am I on track for the recomp goals? Which lifts are stalling? Any adjustments to calories, protein, or the program?\n`;
   document.getElementById("claudeOut").value=s;
 }

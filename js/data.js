@@ -49,14 +49,36 @@ export function daySetCount(d, name){ return blocks(d).reduce((a,b)=>a+loggedSet
 export function blockHasContent(b){
   return Object.keys(b.sets||{}).some(n=>loggedSets(b,n).length) || (b.run && (b.run.dist||b.run.dur)) || (b.activities&&b.activities.length);
 }
-// did the day's own prescribed session get logged in full — every exercise at its prescribed set
-// count, or any run data for a run day? Used for adherence stats instead of a manual toggle.
-export function sessionCompleted(d){
-  const s = CFG.sessions[CFG.split[dow(d)]];
+// was this session type fully logged on this specific day — every exercise at its prescribed set
+// count, or any run data for a run session? (independent of whether `d` is that session's own
+// scheduled day, so it can also check a makeup day.)
+function sessionSatisfiedOnDay(d, sid){
+  const s = CFG.sessions[sid];
   if (!s || s.type==="rest") return false;
   if (s.type==="run") return blocks(d).some(b=>b.run && (b.run.dist||b.run.dur));
   if (s.type==="lift") return s.exercises.every(ex=>daySetCount(d, ex.n) >= ex.sets);
   return false;
+}
+// workout adherence, credited per calendar week (Mon–Sun, matching the split — Sunday is the rest
+// day and the last chance to make up a miss) rather than per exact day: a session made up on a
+// different day still counts, as long as it's within the same week as its own scheduled day — which
+// day it happened on matters less than the work getting done.
+export function adherence(days){
+  const weeks=[]; let cur=[];
+  for (const d of days){ if (dow(d)===1 && cur.length){ weeks.push(cur); cur=[]; } cur.push(d); }
+  if (cur.length) weeks.push(cur);
+  let need=0, got=0;
+  for (const week of weeks){
+    const seen=new Set();
+    for (const d of week){
+      const sid = CFG.split[dow(d)];
+      if (!CFG.sessions[sid] || CFG.sessions[sid].type==="rest" || seen.has(sid)) continue;
+      seen.add(sid); need++;
+      const done = week.some(d2 => (d2===d || (DB.makeup[d2]||[]).includes(sid)) && sessionSatisfiedOnDay(d2, sid));
+      if (done) got++;
+    }
+  }
+  return { need, got };
 }
 
 /* ---------- exercise catalog & progression ---------- */
