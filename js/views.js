@@ -58,10 +58,12 @@ function plannedCard(d){
   else {
     html += musclesSummary(s.exercises);
     html += s.exercises.map(ex=>{
-      const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
+      const liveHi = ex.bw ? suggestedReps(ex.n) : null;
+      const hi = liveHi ?? ex.hi;
+      const rx = `${ex.sets}×${ex.lo===ex.hi?hi:ex.lo+"–"+hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
       const h = exHistory(ex.n);
       const last = h.length ? h[h.length-1] : null;
-      const rdy = readyToProgress(ex.n);
+      const rdy = ex.bw ? null : readyToProgress(ex.n);
       return `<div class="li"><div>${esc(dispName(ex.n))}${ex.mus?`<div class="sub" style="color:var(--faint)">💪 ${esc(ex.mus)}</div>`:""}<div class="sub">${rx}${last?` · last: ${fmtSets(ex.n,last.sets)}`:""}</div></div>
         ${rdy?'<span class="badge good">▲ go heavier</span>':""}</div>`;
     }).join("");
@@ -264,7 +266,7 @@ function workoutCard(d){
     const pin = DB.exNotes[S.addExSel];
     const exd = exDef(S.addExSel);
     html += `${exd&&exd.mus?`<div class="muted" style="color:var(--faint);margin-top:4px">💪 ${esc(exd.mus)}</div>`:""}
-    <div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
+    <div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?(suggR??selRx.lo):selRx.lo+"–"+selRx.hi}`:""}</div>
     <div style="margin:2px 0 4px"><span style="color:var(--warn)">📌 ${pin?esc(pin):'<span class="muted">no pinned note</span>'}</span> · <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="setExNote('${esc(S.addExSel)}');return false">${pin?"edit":"add"} pinned note</a></div>
     <div class="row" style="margin-top:8px">
       ${bw?"":`<div><label class="fl">${sugg!=null?`goal: ${sugg} ${CFG.units.weight}`:CFG.units.weight}</label><input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}"></div>`}
