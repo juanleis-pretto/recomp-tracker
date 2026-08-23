@@ -93,3 +93,33 @@ export function readyToProgress(name){
   return ok ? last : null;
 }
 export function bestE1RM(sets){ return Math.round(Math.max(...sets.map(x=>epley(x.w,x.r)))); }
+// single-joint/isolation moves (less absolute strength behind them) get finer jumps than compound lifts
+const ISOLATION_RE = /curl|pushdown|extension|raise|fly|face pull|woodchop|pallof|kickback/i;
+function exIncrement(name){ return ISOLATION_RE.test(name) ? 2.5 : 5; }
+// double progression: suggest the next weight from the single most recently logged set for this
+// exercise (today's last set if any, else last session's last set) — hit top of rep range → add the
+// increment; missed badly (under half the low end) → drop it; otherwise repeat the same weight
+export function suggestedWeight(name){
+  if (isBodyweight(name)) return null;
+  const h = exHistory(name); if (!h.length) return null;
+  const last = h[h.length-1].sets.slice(-1)[0];
+  const rx = exPrescription(name);
+  if (!rx) return last.w;
+  const inc = exIncrement(name);
+  if (last.r >= rx.hi) return last.w + inc;
+  if (last.r < rx.lo/2) return Math.max(inc, last.w - inc);
+  return last.w;
+}
+// bodyweight moves have no weight to add, so reps (or seconds) is the progressive variable instead —
+// same double-progression rule as suggestedWeight, applied to the target itself: hit the goal → raise
+// it next time; miss badly → ease it back down; otherwise hold at the current prescribed target
+export function suggestedReps(name){
+  if (!isBodyweight(name)) return null;
+  const rx = exPrescription(name); if (!rx) return null;
+  const h = exHistory(name); if (!h.length) return null;
+  const last = h[h.length-1].sets.slice(-1)[0];
+  const inc = rx.unit==='sec' ? 5 : 2;
+  if (last.r >= rx.hi) return last.r + inc;
+  if (last.r < rx.lo/2) return Math.max(inc, last.r - inc);
+  return rx.hi;
+}

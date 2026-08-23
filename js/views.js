@@ -2,7 +2,7 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
@@ -171,12 +171,14 @@ function sessionExercisesHtml(d, s){
   if (s.type!=="lift") return "";
   return s.exercises.map(ex=>{
     const done = daySetCount(d, ex.n);
-    const rdy = readyToProgress(ex.n);
-    const rx = `${ex.sets}×${ex.lo===ex.hi?ex.lo:ex.lo+"–"+ex.hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
+    // bodyweight targets are live (reps/time is the progressive variable) — the static config hi
+    // would otherwise go stale and diverge from the "goal" shown in the add-set form
+    const liveHi = ex.bw ? suggestedReps(ex.n) : null;
+    const hi = liveHi ?? ex.hi;
+    const rdy = ex.bw ? null : readyToProgress(ex.n);
+    const rx = `${ex.sets}×${ex.lo===ex.hi?hi:ex.lo+"–"+hi}${ex.unit?" "+ex.unit:""}${ex.note?" "+ex.note:""}`;
     const rdyW = rdy ? Math.max(...rdy.sets.map(x=>x.w)) : 0;
-    const rdyMsg = rdy ? (ex.bw
-      ? `▲ you hit all ${ex.sets}×${ex.hi}${ex.unit?" "+ex.unit:""} — add reps${ex.unit?"/time":""} next time`
-      : `▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today`) : "";
+    const rdyMsg = rdy ? `▲ you got all ${ex.sets}×${ex.hi} @ ${rdyW} ${CFG.units.weight} — go heavier today` : "";
     const last = (exHistory(ex.n, d).slice(-1)[0]);
     const lastTxt = last ? ` · last: ${fmtSets(ex.n,last.sets)}` : "";
     const pin = DB.exNotes[ex.n];
@@ -256,6 +258,8 @@ function workoutCard(d){
     const h = exHistory(S.addExSel, d);
     const last = h.length ? h[h.length-1] : null;
     const bw = isBodyweight(S.addExSel);
+    const sugg = bw ? null : suggestedWeight(S.addExSel);
+    const suggR = bw ? suggestedReps(S.addExSel) : null;
     const repPh = (selRx&&selRx.unit==='sec')||unitOf(S.addExSel)===" sec" ? "sec" : "reps";
     const pin = DB.exNotes[S.addExSel];
     const exd = exDef(S.addExSel);
@@ -263,8 +267,8 @@ function workoutCard(d){
     <div class="muted" style="margin:6px 0 2px">${last?`Last time (${fmtShort(last.date)}): ${fmtSets(S.addExSel,last.sets)}`:"First time logging this"}${selRx?` · target ${selRx.sets}×${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi}`:""}</div>
     <div style="margin:2px 0 4px"><span style="color:var(--warn)">📌 ${pin?esc(pin):'<span class="muted">no pinned note</span>'}</span> · <a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="setExNote('${esc(S.addExSel)}');return false">${pin?"edit":"add"} pinned note</a></div>
     <div class="row" style="margin-top:8px">
-      ${bw?"":`<input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}">`}
-      <input id="asR" class="num" inputmode="numeric" placeholder="${repPh}">
+      ${bw?"":`<div><label class="fl">${sugg!=null?`goal: ${sugg} ${CFG.units.weight}`:CFG.units.weight}</label><input id="asW" class="num" inputmode="decimal" placeholder="${CFG.units.weight}"></div>`}
+      <div><label class="fl">${suggR!=null?`goal: ${suggR} ${repPh}`:selRx?`goal: ${selRx.lo===selRx.hi?selRx.lo:selRx.lo+"–"+selRx.hi} ${repPh}`:repPh}</label><input id="asR" class="num" inputmode="numeric" placeholder="${repPh}"></div>
       <button class="btn primary fx" onclick="addSet()">Add ${bw?repPh:"set"}</button></div>
     <input id="asNote" placeholder="note for this set (optional)" style="margin-top:8px">
     ${joinTxt}`;
