@@ -1,7 +1,7 @@
 import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
-import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, dayDone, pruneEmptyBlocks,
+import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
          allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
@@ -432,7 +432,7 @@ export function viewHistory(){
     return `<div class="card">
       <h2 style="display:flex;justify-content:space-between;align-items:center">${fmtLong(d)}
         <button class="btn small" onclick="setDate('${d}');go('today')">Edit day</button></h2>
-      ${t?`<div style="font-size:14px;margin-bottom:6px"><b>${t.cal}</b> cal · <b>${t.protein}g</b> protein${DB.mealsDone[d]?' <span style="color:var(--good)">✓</span>':""}${dayDone(d)?' · <span style="color:var(--good)">workout ✓</span>':""}</div>`:""}
+      ${t?`<div style="font-size:14px;margin-bottom:6px"><b>${t.cal}</b> cal · <b>${t.protein}g</b> protein${DB.mealsDone[d]?' <span style="color:var(--good)">✓</span>':""}${bs.length?' · <span style="color:var(--good)">workout ✓</span>':""}</div>`:""}
       ${meals}${wo}
       ${body?`<div class="sub" style="margin-top:4px">⚖ ${body}</div>`:""}
     </div>`;
@@ -522,17 +522,21 @@ export function viewTrends(){
   html+=`<div class="card"><h2>Calories — last 30 days vs ${T.cal} target</h2>
     ${barChart(days,cal,{target:T.cal,floorMode:"above",cheatDow:CFG.cheatDay})}
     <div class="muted">Purple bars are Fridays — cheat meal is part of the plan, not a failure.</div></div>`;
-  let rxDays=0, doneDays=0, floorDays=0, calSum=0, calN=0;
+  let rxDays=0, doneDays=0, floorDays=0, calSum=0, calN=0, fullyLoggedDays=0;
   for (const d of days){
     const sid=CFG.split[dow(d)];
-    if (CFG.sessions[sid].type!=="rest" && d<=today()){ rxDays++; if(dayDone(d)) doneDays++; }
+    // "completed" = actually logged content that day, not the manual done-toggle — the toggle is
+    // easy to forget to click and was making this undercount real workouts
+    if (CFG.sessions[sid].type!=="rest" && d<=today()){ rxDays++; if(blocks(d).some(blockHasContent)) doneDays++; }
     if (DB.meals[d]&&DB.meals[d].length){ const t=dayTotals(d); calSum+=t.cal; calN++; if(t.protein>=T.proteinFloor) floorDays++; }
+    if (DB.mealsDone[d]) fullyLoggedDays++;
   }
   html+=`<div class="card"><h2>Adherence — last 30 days</h2><div class="stat">
     <div class="s"><div class="v">${doneDays}/${rxDays}</div><div class="k">workouts completed vs prescribed</div></div>
     <div class="s"><div class="v">${floorDays}/${calN||0}</div><div class="k">logged days hitting ${T.proteinFloor}g protein floor</div></div>
     <div class="s"><div class="v">${calN?Math.round(calSum/calN):"—"}</div><div class="k">avg daily calories (target ${T.cal})</div></div>
-    <div class="s"><div class="v">${calN}</div><div class="k">days with food logged</div></div>
+    <div class="s"><div class="v">${fullyLoggedDays}</div><div class="k">days with food fully logged</div></div>
+    <div class="s"><div class="v">${days.length-fullyLoggedDays}</div><div class="k">days without all meals logged</div></div>
   </div></div>`;
   return html;
 }
@@ -602,7 +606,7 @@ export function genClaude(){
     anyAct=true; s+=`${d}: ${a.name}${a.dur?`, ${a.dur} min`:""}${a.kcal?`, ~${a.kcal} cal`:""}${a.note?" — "+a.note:""}\n`; }
   if(!anyAct) s+="none logged\n";
   let rxD=0,dnD=0; for(const d of days){ const sid=CFG.split[dow(d)];
-    if(CFG.sessions[sid].type!=="rest"){ rxD++; if(dayDone(d)) dnD++; } }
+    if(CFG.sessions[sid].type!=="rest"){ rxD++; if(blocks(d).some(blockHasContent)) dnD++; } }
   s+=`\n## Adherence (30d)\nWorkouts: ${dnD}/${rxD} prescribed sessions completed\n`;
   s+=`\nQuestions for you, Claude: Am I on track for the recomp goals? Which lifts are stalling? Any adjustments to calories, protein, or the program?\n`;
   document.getElementById("claudeOut").value=s;
