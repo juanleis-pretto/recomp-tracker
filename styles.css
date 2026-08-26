@@ -52,6 +52,8 @@ label.fl{display:block;font-size:12px;color:var(--dim);margin:8px 0 3px;}
 .mealbtn.logged{border-color:#1f5c30;background:#12351c;}
 .mealbtn.logged .mm{color:var(--good);}
 .loggedlist{margin-top:10px;}
+.mealgroup{background:var(--panel2);border-radius:10px;padding:2px 10px;margin-top:10px;}
+.mealgroup .ghead{display:flex;justify-content:space-between;padding:8px 0 6px;font-size:12px;font-weight:600;color:var(--dim);}
 .li{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:14px;}
 .sub{color:var(--dim);font-size:12px;}
 .del{background:none;border:none;color:var(--faint);font-size:17px;padding:4px 8px;}

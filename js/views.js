@@ -121,7 +121,7 @@ function foodCard(d){
       return `<div class="li"><div style="cursor:pointer" onclick="editMeal(${i})">${esc(m.name)}<div class="sub">${macros} · <span style="color:var(--accent)">edit</span></div></div>
       <button class="del" onclick="delMeal(${i})">✕</button></div>`;
     }).join("");
-    return `<div class="sub" style="display:flex;justify-content:space-between;margin-top:10px;font-weight:600;color:var(--dim)"><span>${esc(lbl)}</span><span>${gCal} cal · ${gPro}g protein</span></div>${rows}`;
+    return `<div class="mealgroup"><div class="ghead"><span>${esc(lbl)}</span><span>${gCal} cal · ${gPro}g protein</span></div>${rows}</div>`;
   }).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
