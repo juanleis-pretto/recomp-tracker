@@ -94,25 +94,34 @@ function foodCard(d){
   const isCheat = dow(d)===CFG.cheatDay;
   const lblChips = MEAL_LABELS.map(l=>`<button class="${l===S.mealLabel?'on':''}"
     onclick="pickLabel('${l}',this)">${l}</button>`).join("");
-  const list = meals.map((m,i)=>{
-    if (i===S.editMeal){
-      const lchips = MEAL_LABELS.map(l=>`<button class="${l===(m.label||'Other')?'on':''}" onclick="pickEditLabel('${l}',this)">${l}</button>`).join("");
-      return `<div class="li" style="display:block">
-        <div class="seg" id="editlbl" style="margin-bottom:6px">${lchips}</div>
-        <input id="emName" value="${esc(m.name)}" style="margin-bottom:6px">
-        <div class="row">
-          <input id="emCal" class="num" inputmode="decimal" value="${m.lazy?"":(m.cal??"")}" placeholder="Calories">
-          <input id="emPro" class="num" inputmode="decimal" value="${m.lazy?"":(m.protein??"")}" placeholder="Protein g"></div>
-        <div class="row" style="margin-top:8px">
-          <button class="btn primary" onclick="saveMealEdit(${i})">Save</button>
-          <button class="btn ghost fx" onclick="cancelMealEdit()">Cancel</button></div>
-        <div class="muted" style="margin-top:4px;font-size:12px">Leave calories blank to keep it record-only.</div>
-      </div>`;
-    }
-    const tm = m.t && dstr(new Date(m.t))===d ? ` · ${fmtTime(m.t)}` : "";
-    const macros = m.lazy ? `not counted${tm}` : `${m.cal} cal · ${m.protein}g protein${tm}`;
-    return `<div class="li"><div style="cursor:pointer" onclick="editMeal(${i})">${m.label?`<b>${esc(m.label)}</b> — `:""}${esc(m.name)}<div class="sub">${macros} · <span style="color:var(--accent)">edit</span></div></div>
-    <button class="del" onclick="delMeal(${i})">✕</button></div>`;
+  const groups = {};
+  meals.forEach((m,i)=>{ const lbl=m.label||"Other"; (groups[lbl]=groups[lbl]||[]).push(i); });
+  const list = MEAL_LABELS.filter(lbl=>groups[lbl]).map(lbl=>{
+    const idxs = groups[lbl];
+    const gCal = Math.round(idxs.reduce((a,i)=>a+(+meals[i].cal||0),0)*10)/10;
+    const gPro = Math.round(idxs.reduce((a,i)=>a+(+meals[i].protein||0),0)*10)/10;
+    const rows = idxs.map(i=>{
+      const m = meals[i];
+      if (i===S.editMeal){
+        const lchips = MEAL_LABELS.map(l=>`<button class="${l===(m.label||'Other')?'on':''}" onclick="pickEditLabel('${l}',this)">${l}</button>`).join("");
+        return `<div class="li" style="display:block">
+          <div class="seg" id="editlbl" style="margin-bottom:6px">${lchips}</div>
+          <input id="emName" value="${esc(m.name)}" style="margin-bottom:6px">
+          <div class="row">
+            <input id="emCal" class="num" inputmode="decimal" value="${m.lazy?"":(m.cal??"")}" placeholder="Calories">
+            <input id="emPro" class="num" inputmode="decimal" value="${m.lazy?"":(m.protein??"")}" placeholder="Protein g"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn primary" onclick="saveMealEdit(${i})">Save</button>
+            <button class="btn ghost fx" onclick="cancelMealEdit()">Cancel</button></div>
+          <div class="muted" style="margin-top:4px;font-size:12px">Leave calories blank to keep it record-only.</div>
+        </div>`;
+      }
+      const tm = m.t && dstr(new Date(m.t))===d ? ` · ${fmtTime(m.t)}` : "";
+      const macros = m.lazy ? `not counted${tm}` : `${m.cal} cal · ${m.protein}g protein${tm}`;
+      return `<div class="li"><div style="cursor:pointer" onclick="editMeal(${i})">${esc(m.name)}<div class="sub">${macros} · <span style="color:var(--accent)">edit</span></div></div>
+      <button class="del" onclick="delMeal(${i})">✕</button></div>`;
+    }).join("");
+    return `<div class="sub" style="display:flex;justify-content:space-between;margin-top:10px;font-weight:600;color:var(--dim)"><span>${esc(lbl)}</span><span>${gCal} cal · ${gPro}g protein</span></div>${rows}`;
   }).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
