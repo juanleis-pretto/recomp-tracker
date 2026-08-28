@@ -426,24 +426,35 @@ function mealsDoneStreak(){
   while (DB.mealsDone[dstr(d)]){ n++; d.setDate(d.getDate()-1); }
   return n;
 }
+// how a day reads on the calendar: fully logged splits on the calorie target, so the grid
+// shows both whether the day got logged and whether it landed — green on/under target,
+// red over it, yellow logged but never marked complete, gray nothing at all.
+function dayState(d){
+  if (!DB.mealsDone[d]) return (DB.meals[d]&&DB.meals[d].length) ? "partial" : "none";
+  return dayTotals(d).cal > CFG.targets.cal ? "over" : "done";
+}
+const STATE_MARK = { done:"✓", over:"▲", partial:"", none:"" };
+const STATE_LABEL = { done:"all meals logged, on target", over:"all meals logged, over calorie target",
+                      partial:"partly logged", none:"nothing logged" };
 // month grid, Monday-first to match the Mon–Sun week adherence() credits against.
-// Green = marked "all meals logged"; a dot = food logged but never marked complete.
 function calendarCard(){
   const [y,m] = S.calMonth.split("-").map(Number);
   const cur = today(), curMonth = cur.slice(0,7);
   const lead = (new Date(y,m-1,1).getDay()+6)%7;      // Mon-first offset of the 1st
   const nDays = new Date(y,m,0).getDate();
-  let cells="", done=0, partial=0, elapsed=0;
+  const T = CFG.targets.cal;
+  let cells="", done=0, over=0, partial=0, elapsed=0;
   for (let i=0;i<lead;i++) cells += `<div class="cal-d empty"></div>`;
   for (let n=1;n<=nDays;n++){
     const d = dstr(new Date(y,m-1,n));
-    const isDone = !!DB.mealsDone[d], hasFood = !!(DB.meals[d]&&DB.meals[d].length);
+    const st = dayState(d);
     const future = d > cur;
-    if (!future){ elapsed++; if (isDone) done++; else if (hasFood) partial++; }
-    const cls = ["cal-d", isDone?"done":(hasFood?"partial":""), d===cur?"today":"", future?"future":""].filter(Boolean).join(" ");
-    cells += `<button class="${cls}" onclick="openDay('${d}')" aria-label="${fmtLong(d)}${isDone?" — all meals logged":""}">
-      <span class="cn">${n}</span><span class="cm">${isDone?"✓":(hasFood?"•":"")}</span></button>`;
+    if (!future){ elapsed++; if (st==="done") done++; else if (st==="over") over++; else if (st==="partial") partial++; }
+    const cls = ["cal-d", st, d===cur?"today":"", future?"future":""].filter(Boolean).join(" ");
+    cells += `<button class="${cls}" onclick="openDay('${d}')" aria-label="${fmtLong(d)} — ${STATE_LABEL[st]}">
+      <span class="cn">${n}</span><span class="cm">${STATE_MARK[st]}</span></button>`;
   }
+  const logged = done + over;
   const label = new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
   const atCur = S.calMonth >= curMonth;
   return `<div class="card">
@@ -456,13 +467,15 @@ function calendarCard(){
     <div class="cal-head">${CAL_DOW.map(c=>`<div>${c}</div>`).join("")}</div>
     <div class="cal">${cells}</div>
     <div class="cal-legend">
-      <span><i class="sw done"></i>all meals logged</span>
-      <span><i class="sw partial"></i>food logged, not marked</span>
+      <span><i class="sw done"></i>all meals · on target</span>
+      <span><i class="sw over"></i>all meals · over</span>
+      <span><i class="sw partial"></i>partly logged</span>
       <span><i class="sw"></i>nothing logged</span>
     </div>
     <div class="stat" style="margin-top:10px">
-      <div class="s"><div class="v">${elapsed?done+"/"+elapsed:"—"}</div><div class="k">days this month with all meals logged</div></div>
+      <div class="s"><div class="v">${elapsed?logged+"/"+elapsed:"—"}</div><div class="k">days this month with all meals logged</div></div>
       <div class="s"><div class="v">${mealsDoneStreak()}</div><div class="k">day current streak</div></div>
+      <div class="s" style="grid-column:1/-1"><div class="v">${logged?done+"/"+logged:"—"}</div><div class="k">of those, at or under the ${T} cal target${over?` · ${over} over`:""}</div></div>
     </div>
     ${partial?`<div class="muted" style="margin-top:8px">${partial} day${partial>1?"s":""} this month have food logged but were never marked complete — tap one to finish it off.</div>`:""}
   </div>`;
