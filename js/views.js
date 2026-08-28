@@ -2,11 +2,11 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
-export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7) };
+export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food" };
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
@@ -415,8 +415,17 @@ export function saveBody(k, inputId){
 }
 
 /* ================= HISTORY ================= */
-/* ---------- calendar of "all meals logged" days ---------- */
+/* ================= CALENDAR ================= */
 const CAL_DOW = ["M","T","W","T","F","S","S"];
+// states that paint a cell; anything else (rest, nothing logged, future) stays the default gray
+const CAL_COLORED = new Set(["done","over","partial","missed"]);
+
+// food: green fully logged at or under the calorie target, red fully logged but over it,
+// yellow logged but never marked complete
+function foodDayState(d){
+  if (!DB.mealsDone[d]) return (DB.meals[d]&&DB.meals[d].length) ? "partial" : "none";
+  return dayTotals(d).cal > CFG.targets.cal ? "over" : "done";
+}
 // consecutive days ending today with every meal logged. Today not yet marked doesn't break
 // the streak — the day isn't over — so counting starts from yesterday in that case.
 function mealsDoneStreak(){
@@ -426,67 +435,87 @@ function mealsDoneStreak(){
   while (DB.mealsDone[dstr(d)]){ n++; d.setDate(d.getDate()-1); }
   return n;
 }
-// how a day reads on the calendar: fully logged splits on the calorie target, so the grid
-// shows both whether the day got logged and whether it landed — green on/under target,
-// red over it, yellow logged but never marked complete, gray nothing at all.
-function dayState(d){
-  if (!DB.mealsDone[d]) return (DB.meals[d]&&DB.meals[d].length) ? "partial" : "none";
-  return dayTotals(d).cal > CFG.targets.cal ? "over" : "done";
-}
-const STATE_MARK = { done:"✓", over:"▲", partial:"", none:"" };
-const STATE_LABEL = { done:"all meals logged, on target", over:"all meals logged, over calorie target",
-                      partial:"partly logged", none:"nothing logged" };
-// month grid, Monday-first to match the Mon–Sun week adherence() credits against.
+/* The two calendars differ only in how a day is scored, so each mode supplies a state
+   function plus the marker, spoken label, legend and stats for the states it can return. */
+const CAL_MODES = {
+  food: {
+    tab:"Food", state:foodDayState,
+    mark:  { done:"✓", over:"▲" },
+    label: { done:"all meals logged, on target", over:"all meals logged, over the calorie target",
+             partial:"partly logged", none:"nothing logged" },
+    legend:[["done","all meals · on target"],["over","all meals · over"],["partial","partly logged"],["","nothing logged"]],
+    stats(c, elapsed){
+      const logged = c.done + c.over;
+      return `<div class="s"><div class="v">${elapsed?logged+"/"+elapsed:"—"}</div><div class="k">days this month with all meals logged</div></div>
+        <div class="s"><div class="v">${mealsDoneStreak()}</div><div class="k">day current streak</div></div>
+        <div class="s" style="grid-column:1/-1"><div class="v">${logged?c.done+"/"+logged:"—"}</div><div class="k">of those, at or under the ${CFG.targets.cal} cal target${c.over?` · ${c.over} over`:""}</div></div>`;
+    },
+    note(c){ return c.partial ? `${c.partial} day${c.partial>1?"s":""} this month have food logged but were never marked complete — tap one to finish it off.` : ""; },
+  },
+  workout: {
+    tab:"Workouts", state:workoutDayState,
+    mark:  { done:"✓", missed:"✕" },
+    label: { done:"prescribed session completed", partial:"trained, prescription not finished",
+             missed:"prescribed session missed", rest:"rest day", future:"upcoming" },
+    legend:[["done","session done"],["partial","trained, not finished"],["missed","missed"],["","rest / made up elsewhere"]],
+    stats(c, elapsed, days){
+      const adh = adherence(days);
+      return `<div class="s"><div class="v">${adh.need?adh.got+"/"+adh.need:"—"}</div><div class="k">prescribed sessions completed this month</div></div>
+        <div class="s"><div class="v">${c.done}</div><div class="k">days you finished a prescribed session</div></div>`;
+    },
+    note(c){
+      const bits = [];
+      if (c.missed) bits.push(`${c.missed} prescribed session${c.missed>1?"s":""} missed and not made up`);
+      if (c.partial) bits.push(`${c.partial} day${c.partial>1?"s":""} trained without finishing the prescription`);
+      return bits.length ? bits.join(" · ") + ". A session made up on another day of the same week greens up that day instead." : "";
+    },
+  },
+};
+// month grid, Monday-first to match the Mon–Sun week adherence() credits against
 function calendarCard(){
+  const mode = CAL_MODES[S.calMode] || CAL_MODES.food;
   const [y,m] = S.calMonth.split("-").map(Number);
   const cur = today(), curMonth = cur.slice(0,7);
   const lead = (new Date(y,m-1,1).getDay()+6)%7;      // Mon-first offset of the 1st
   const nDays = new Date(y,m,0).getDate();
-  const T = CFG.targets.cal;
-  let cells="", done=0, over=0, partial=0, elapsed=0;
+  const counts = { done:0, over:0, partial:0, missed:0, rest:0, none:0 };
+  let cells = "", elapsed = 0;
+  const elapsedDays = [];
   for (let i=0;i<lead;i++) cells += `<div class="cal-d empty"></div>`;
   for (let n=1;n<=nDays;n++){
     const d = dstr(new Date(y,m-1,n));
-    const st = dayState(d);
     const future = d > cur;
-    if (!future){ elapsed++; if (st==="done") done++; else if (st==="over") over++; else if (st==="partial") partial++; }
-    const cls = ["cal-d", st, d===cur?"today":"", future?"future":""].filter(Boolean).join(" ");
-    cells += `<button class="${cls}" onclick="openDay('${d}')" aria-label="${fmtLong(d)} — ${STATE_LABEL[st]}">
-      <span class="cn">${n}</span><span class="cm">${STATE_MARK[st]}</span></button>`;
+    const st = future ? "future" : mode.state(d);
+    if (!future){ elapsed++; elapsedDays.push(d); counts[st] = (counts[st]||0)+1; }
+    const cls = ["cal-d", CAL_COLORED.has(st)?st:"", d===cur?"today":"", future?"future":""].filter(Boolean).join(" ");
+    cells += `<button class="${cls}" onclick="openDay('${d}')" aria-label="${fmtLong(d)} — ${mode.label[st]||""}">
+      <span class="cn">${n}</span><span class="cm">${mode.mark[st]||""}</span></button>`;
   }
-  const logged = done + over;
   const label = new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
-  const atCur = S.calMonth >= curMonth;
+  const note = mode.note(counts);
   return `<div class="card">
-    <h2>All meals logged</h2>
+    <div class="seg">${Object.entries(CAL_MODES).map(([k,v])=>
+      `<button class="${k===S.calMode?'on':''}" onclick="setCalMode('${k}')">${v.tab}</button>`).join("")}</div>
     <div class="row" style="margin-bottom:10px">
       <button class="btn small fx" onclick="shiftMonth(-1)">‹</button>
       <div style="text-align:center;font-weight:600;font-size:15px">${esc(label)}</div>
-      <button class="btn small fx" onclick="shiftMonth(1)" ${atCur?"disabled style=\"opacity:.35\"":""}>›</button>
+      <button class="btn small fx" onclick="shiftMonth(1)" ${S.calMonth>=curMonth?'disabled style="opacity:.35"':""}>›</button>
     </div>
     <div class="cal-head">${CAL_DOW.map(c=>`<div>${c}</div>`).join("")}</div>
     <div class="cal">${cells}</div>
-    <div class="cal-legend">
-      <span><i class="sw done"></i>all meals · on target</span>
-      <span><i class="sw over"></i>all meals · over</span>
-      <span><i class="sw partial"></i>partly logged</span>
-      <span><i class="sw"></i>nothing logged</span>
-    </div>
-    <div class="stat" style="margin-top:10px">
-      <div class="s"><div class="v">${elapsed?logged+"/"+elapsed:"—"}</div><div class="k">days this month with all meals logged</div></div>
-      <div class="s"><div class="v">${mealsDoneStreak()}</div><div class="k">day current streak</div></div>
-      <div class="s" style="grid-column:1/-1"><div class="v">${logged?done+"/"+logged:"—"}</div><div class="k">of those, at or under the ${T} cal target${over?` · ${over} over`:""}</div></div>
-    </div>
-    ${partial?`<div class="muted" style="margin-top:8px">${partial} day${partial>1?"s":""} this month have food logged but were never marked complete — tap one to finish it off.</div>`:""}
+    <div class="cal-legend">${mode.legend.map(([c,t])=>`<span><i class="sw ${c}"></i>${t}</span>`).join("")}</div>
+    <div class="stat" style="margin-top:10px">${mode.stats(counts, elapsed, elapsedDays)}</div>
+    ${note?`<div class="muted" style="margin-top:8px">${note}</div>`:""}
   </div>`;
 }
+export function setCalMode(k){ S.calMode = k; render(); }
 export function shiftMonth(n){
   const [y,m] = S.calMonth.split("-").map(Number);
-  const d = new Date(y, m-1+n, 1);
-  S.calMonth = dstr(d).slice(0,7);
+  S.calMonth = dstr(new Date(y, m-1+n, 1)).slice(0,7);
   render();
 }
 export function openDay(d){ S.selDate=d; S.addExSel=""; S.editMeal=null; go("today"); }
+
 
 export function viewHistory(){
   const dates = new Set([...Object.keys(DB.meals), ...Object.keys(DB.workouts), ...Object.keys(DB.weight), ...Object.keys(DB.waist)]);

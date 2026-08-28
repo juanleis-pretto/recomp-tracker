@@ -1,6 +1,6 @@
 import { CFG } from "./config.js";
 import { DB } from "./store.js";
-import { today, dow, epley } from "./util.js";
+import { today, dow, parseD, dstr, epley } from "./util.js";
 
 /* ---------- nutrition ---------- */
 export function dayTotals(date){
@@ -79,6 +79,36 @@ export function adherence(days){
     }
   }
   return { need, got };
+}
+
+// the Mon–Sun week containing d, as date strings — the unit adherence() credits against
+function weekOf(d){
+  const x = parseD(d), mon = new Date(x);
+  mon.setDate(x.getDate() - ((x.getDay()+6)%7));
+  return Array.from({length:7}, (_,i)=>{ const y=new Date(mon); y.setDate(mon.getDate()+i); return dstr(y); });
+}
+// was this session made up on some *other* day of d's week?
+function madeUpInWeek(d, sid){
+  return weekOf(d).some(d2 => d2!==d && (DB.makeup[d2]||[]).includes(sid) && sessionSatisfiedOnDay(d2, sid));
+}
+/* How a day reads for workouts. A session counts on whatever day it actually got done, so a
+   Tuesday session made up on Wednesday makes *Wednesday* the completed day — same credit rule
+   adherence() uses.
+     done    — a prescribed session was completed here (this day's own, or one made up onto it)
+     partial — training was logged, but no prescribed session was finished
+     missed  — a session was prescribed, nothing was logged, and it wasn't made up that week
+     rest    — the split prescribes rest, or the missed session was made up on another day
+   Today is never "missed" — the day isn't over. A miss also un-reds itself the moment that
+   session gets made up later in the same week. */
+export function workoutDayState(d){
+  if (d > today()) return "future";
+  const sid = CFG.split[dow(d)], own = CFG.sessions[sid];
+  const prescribed = own && own.type !== "rest";
+  if (prescribed && sessionSatisfiedOnDay(d, sid)) return "done";
+  if ((DB.makeup[d]||[]).some(m => sessionSatisfiedOnDay(d, m))) return "done";
+  if (blocks(d).some(blockHasContent)) return "partial";
+  if (!prescribed || d === today()) return "rest";
+  return madeUpInWeek(d, sid) ? "rest" : "missed";
 }
 
 /* ---------- exercise catalog & progression ---------- */
