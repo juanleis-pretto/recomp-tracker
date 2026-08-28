@@ -3,7 +3,7 @@ import { parseD } from "./util.js";
 
 /* localStorage = write-through cache (works offline in the gym);
    Supabase Postgres = source of truth. Dirty flag → last-write-wins push. */
-export const DOC_KEYS = ["meals","workouts","weight","waist","photos","dismissed","makeup","aliases","exNotes","mealsDone"];
+export const DOC_KEYS = ["meals","workouts","weight","waist","photos","dismissed","makeup","aliases","exNotes","mealsDone","prefs"];
 
 export const Store = {
   KEY: "recomp_v1", DIRTY: "recomp_dirty",
