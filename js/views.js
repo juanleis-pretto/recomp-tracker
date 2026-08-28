@@ -6,7 +6,7 @@ import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, bloc
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
-export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null };
+export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7) };
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
@@ -415,13 +415,74 @@ export function saveBody(k, inputId){
 }
 
 /* ================= HISTORY ================= */
+/* ---------- calendar of "all meals logged" days ---------- */
+const CAL_DOW = ["M","T","W","T","F","S","S"];
+// consecutive days ending today with every meal logged. Today not yet marked doesn't break
+// the streak — the day isn't over — so counting starts from yesterday in that case.
+function mealsDoneStreak(){
+  const d = parseD(today());
+  if (!DB.mealsDone[dstr(d)]) d.setDate(d.getDate()-1);
+  let n = 0;
+  while (DB.mealsDone[dstr(d)]){ n++; d.setDate(d.getDate()-1); }
+  return n;
+}
+// month grid, Monday-first to match the Mon–Sun week adherence() credits against.
+// Green = marked "all meals logged"; a dot = food logged but never marked complete.
+function calendarCard(){
+  const [y,m] = S.calMonth.split("-").map(Number);
+  const cur = today(), curMonth = cur.slice(0,7);
+  const lead = (new Date(y,m-1,1).getDay()+6)%7;      // Mon-first offset of the 1st
+  const nDays = new Date(y,m,0).getDate();
+  let cells="", done=0, partial=0, elapsed=0;
+  for (let i=0;i<lead;i++) cells += `<div class="cal-d empty"></div>`;
+  for (let n=1;n<=nDays;n++){
+    const d = dstr(new Date(y,m-1,n));
+    const isDone = !!DB.mealsDone[d], hasFood = !!(DB.meals[d]&&DB.meals[d].length);
+    const future = d > cur;
+    if (!future){ elapsed++; if (isDone) done++; else if (hasFood) partial++; }
+    const cls = ["cal-d", isDone?"done":(hasFood?"partial":""), d===cur?"today":"", future?"future":""].filter(Boolean).join(" ");
+    cells += `<button class="${cls}" onclick="openDay('${d}')" aria-label="${fmtLong(d)}${isDone?" — all meals logged":""}">
+      <span class="cn">${n}</span><span class="cm">${isDone?"✓":(hasFood?"•":"")}</span></button>`;
+  }
+  const label = new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  const atCur = S.calMonth >= curMonth;
+  return `<div class="card">
+    <h2>All meals logged</h2>
+    <div class="row" style="margin-bottom:10px">
+      <button class="btn small fx" onclick="shiftMonth(-1)">‹</button>
+      <div style="text-align:center;font-weight:600;font-size:15px">${esc(label)}</div>
+      <button class="btn small fx" onclick="shiftMonth(1)" ${atCur?"disabled style=\"opacity:.35\"":""}>›</button>
+    </div>
+    <div class="cal-head">${CAL_DOW.map(c=>`<div>${c}</div>`).join("")}</div>
+    <div class="cal">${cells}</div>
+    <div class="cal-legend">
+      <span><i class="sw done"></i>all meals logged</span>
+      <span><i class="sw partial"></i>food logged, not marked</span>
+      <span><i class="sw"></i>nothing logged</span>
+    </div>
+    <div class="stat" style="margin-top:10px">
+      <div class="s"><div class="v">${elapsed?done+"/"+elapsed:"—"}</div><div class="k">days this month with all meals logged</div></div>
+      <div class="s"><div class="v">${mealsDoneStreak()}</div><div class="k">day current streak</div></div>
+    </div>
+    ${partial?`<div class="muted" style="margin-top:8px">${partial} day${partial>1?"s":""} this month have food logged but were never marked complete — tap one to finish it off.</div>`:""}
+  </div>`;
+}
+export function shiftMonth(n){
+  const [y,m] = S.calMonth.split("-").map(Number);
+  const d = new Date(y, m-1+n, 1);
+  S.calMonth = dstr(d).slice(0,7);
+  render();
+}
+export function openDay(d){ S.selDate=d; S.addExSel=""; S.editMeal=null; go("today"); }
+
 export function viewHistory(){
   const dates = new Set([...Object.keys(DB.meals), ...Object.keys(DB.workouts), ...Object.keys(DB.weight), ...Object.keys(DB.waist)]);
   const list = [...dates].filter(d=>{
     return (DB.meals[d]&&DB.meals[d].length) || blocks(d).some(blockHasContent) || DB.weight[d]!=null || DB.waist[d]!=null;
   }).sort().reverse().slice(0,60);
-  if (!list.length) return `<div class="card"><div class="center">Nothing logged yet. Log a day and it shows up here.</div></div>`;
-  return list.map(d=>{
+  const cal = calendarCard();
+  if (!list.length) return cal + `<div class="card"><div class="center">Nothing logged yet. Log a day and it shows up here.</div></div>`;
+  return cal + list.map(d=>{
     const t = DB.meals[d]&&DB.meals[d].length ? dayTotals(d) : null;
     const meals = (DB.meals[d]||[]).map(m=>`<div class="sub">🍽 ${m.label?esc(m.label)+": ":""}${esc(m.name)} — ${m.lazy?"not counted":`${m.cal} cal / ${m.protein}g`}${m.t&&dstr(new Date(m.t))===d?` · ${fmtTime(m.t)}`:""}</div>`).join("");
     let wo="";
