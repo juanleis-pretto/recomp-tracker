@@ -99,3 +99,25 @@ textarea.exp{height:260px;font-size:12px;font-family:ui-monospace,Menlo,monospac
   opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;}
 details.cust summary{font-size:13px;color:var(--accent);cursor:pointer;margin-top:10px;}
+/* calendar — "all meals logged" month grid */
+.cal-head{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;}
+.cal-head div{text-align:center;font-size:11px;color:var(--faint);letter-spacing:.05em;}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-d{background:var(--panel2);border:1px solid transparent;border-radius:8px;color:var(--dim);
+  min-height:42px;padding:5px 0 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
+.cal-d .cn{font-size:14px;line-height:1;}
+.cal-d .cm{font-size:11px;line-height:1;height:11px;}
+.cal-d.empty{background:none;border:none;}
+.cal-d.partial{color:var(--text);}
+.cal-d.partial .cm{color:var(--warn);font-size:9px;}
+.cal-d.done{background:#12351c;border-color:#1f5c30;color:var(--good);}
+.cal-d.done .cn{font-weight:700;}
+.cal-d.today{border-color:var(--accent);}
+.cal-d.future{opacity:.35;}
+.cal-d:active{background:#26303f;}
+.cal-d.done:active{background:#17441f;}
+.cal-legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:10px;font-size:11px;color:var(--faint);}
+.cal-legend span{display:flex;align-items:center;gap:5px;}
+.cal-legend .sw{width:10px;height:10px;border-radius:3px;background:var(--panel2);border:1px solid var(--border);}
+.cal-legend .sw.done{background:#12351c;border-color:#1f5c30;}
+.cal-legend .sw.partial{background:var(--panel2);border-color:var(--warn);}
