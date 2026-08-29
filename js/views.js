@@ -4,7 +4,6 @@ import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastN
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
          allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
-import * as Rest from "./timer.js";
 
 /* ---------- ui state ---------- */
 export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food" };
@@ -286,8 +285,6 @@ function workoutCard(d){
     ${joinTxt}`;
   }
 
-  html += restControls();
-
   // logged workouts for the day
   arr.forEach((b,bi)=>{
     if (!blockHasContent(b) && !b.done) return;
@@ -310,33 +307,6 @@ function workoutCard(d){
   html += `</div>`;
   return html;
 }
-/* ---------- rest timer ---------- */
-const REST_PRESETS = [60, 90, 120, 180];
-const restDefault = () => DB.prefs.restSecs || 90;
-const restAuto = () => DB.prefs.restAuto !== 0;      // on unless explicitly turned off
-const fmtDur = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
-function restControls(){
-  const def = restDefault(), auto = restAuto();
-  return `<h3>Rest timer</h3>
-    <div class="muted" style="margin-bottom:6px">Starts the countdown and floats it over the phone — swipe back to your home screen and it stays up.</div>
-    <div class="seg">${REST_PRESETS.map(x=>`<button class="${x===def?'on':''}" onclick="startRest(${x})">${fmtDur(x)}</button>`).join("")}</div>
-    <button class="btn small ${auto?'done':'ghost'}" onclick="toggleRestAuto()">${auto?`✓ auto-start ${fmtDur(def)} after each set`:"auto-start after each set — off"}</button>`;
-}
-// tapping a preset both sets the default and starts it, so the next set's auto-start matches
-export function startRest(secs){
-  DB.prefs.restSecs = secs; Store.save();
-  Rest.start(secs);
-  render();
-}
-export function toggleRestAuto(){ DB.prefs.restAuto = restAuto() ? 0 : 1; Store.save(); render(); }
-export function restToggle(){ Rest.toggle(); }
-export function restAdd(s){ Rest.add(s); }
-export function restStop(){ Rest.stop(); }
-export function restPop(){
-  if (!Rest.pipAvailable()){ toast("Pop-out isn't supported in this browser"); return; }
-  Rest.togglePop();
-}
-
 export function selEx(n){ S.addExSel=n; render(); const el=document.getElementById("asW")||document.getElementById("asR"); if(el) el.focus(); }
 export function setExNote(name){
   const cur=DB.exNotes[name]||"";
@@ -356,9 +326,7 @@ export function addSet(){
   const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
   const set={w:wv, r:rv}; if(note) set.note=note;
   (b.sets[S.addExSel]=b.sets[S.addExSel]||[]).push(set);
-  Store.save();
-  if (restAuto()) Rest.start(restDefault());
-  render();
+  Store.save(); render();
 }
 // selDate (YYYY-MM-DD) + "HH:MM" → epoch ms
 function tsFromTime(dateStr, hhmm){ const [y,m,dd]=dateStr.split("-").map(Number); const [H,M]=hhmm.split(":").map(Number); return new Date(y,m-1,dd,H||0,M||0).getTime(); }

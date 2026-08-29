@@ -54,39 +54,11 @@ js/util.js      date/format helpers, Epley
 js/store.js     persistence: localStorage cache + Supabase sync, v1→v2 migration
 js/data.js      domain logic: totals, workout blocks, progression detection
 js/charts.js    dependency-free SVG line/bar charts
-js/timer.js     rest timer (video-backed, pops out over other apps)
 js/views.js     all screens + user actions
 js/app.js       tabs, render loop, window bindings, boot
-assets/         rest-timer.mp4 — generated, see tools/
-tools/          make-rest-timer.py — regenerates the timer video
 ```
 
 Workout model: `workouts[date]` is an array of **blocks** (a workout). A set logged within 2h (`CFG.workoutWindowMs`) of the day's last activity joins the current workout; a longer gap — or the "start a new workout" link — begins a new one. Sets bundle per exercise within a block regardless of order.
-
-## Rest timer
-
-Tap a preset (or log a set, with auto-start on) and the countdown starts *and* pops out
-into a floating window, so you can leave the app and still see it.
-
-It's a video, not a JS countdown. iOS won't stream a live `<canvas>` into
-Picture-in-Picture ([WebKit 181663](https://bugs.webkit.org/show_bug.cgi?id=181663)), but it
-will float a real `<video>` — so `assets/rest-timer.mp4` is one 10-minute countdown and an
-N-second rest seeks to `600 - N` and plays to 0:00. Consequences worth knowing:
-
-- The **system** runs the clock and the end chime, so both keep working while the app is
-  backgrounded or suspended — which plain JS timers don't survive on iOS.
-- `video.currentTime` is the only clock, so the in-app readout can't drift from the
-  popped-out window, and there's nothing to resync when you come back to the app.
-- Max rest is 10:00, the length baked into the video.
-- The timer bar lives outside `#main` because `render()` replaces that element's markup —
-  tearing the `<video>` out mid-rest would stop playback and drop out of PiP.
-- Serving it needs byte-range support (Vercel does this) or iOS won't play or seek it.
-
-To change the look, durations, or beeps, edit and re-run `python3 tools/make-rest-timer.py`
-(needs `ffmpeg` with libx264/aac, plus Pillow). Keep `SPAN` in `js/timer.js` in sync.
-
-Pop-out needs Picture-in-Picture, which the button feature-detects; where it's unavailable
-the in-app bar still counts down normally.
 
 ## Changing the program
 
