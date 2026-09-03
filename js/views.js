@@ -92,8 +92,9 @@ function foodCard(d){
   const T = targets();
   const pLeft = Math.round(Math.max(0, T.protein - t.protein)*10)/10;
   const isCheat = dow(d)===CFG.cheatDay;
-  const lblChips = MEAL_LABELS.map(l=>`<button class="${l===S.mealLabel?'on':''}"
-    onclick="pickLabel('${l}',this)">${l}</button>`).join("");
+  // a select rather than chips: the label list is long enough that chips wrapped badly
+  const lblOpts = sel => MEAL_LABELS.map(l=>
+    `<option value="${esc(l)}"${l===sel?" selected":""}>${esc(l)}</option>`).join("");
   const groups = {};
   meals.forEach((m,i)=>{ const lbl=m.label||"Other"; (groups[lbl]=groups[lbl]||[]).push(i); });
   // configured labels first, in program order, then anything else that's been logged — a label
@@ -106,10 +107,10 @@ function foodCard(d){
     const rows = idxs.map(i=>{
       const m = meals[i];
       if (i===S.editMeal){
-        const lchips = MEAL_LABELS.map(l=>`<button class="${l===(m.label||'Other')?'on':''}" onclick="pickEditLabel('${l}',this)">${l}</button>`).join("");
         return `<div class="li" style="display:block">
-          <div class="seg" id="editlbl" style="margin-bottom:6px">${lchips}</div>
-          <input id="emName" value="${esc(m.name)}" style="margin-bottom:6px">
+          <div class="row" style="margin-bottom:6px">
+            <select style="flex:0 0 42%" onchange="pickEditLabel(this.value)">${lblOpts(S._editLabel || m.label || "Other")}</select>
+            <input id="emName" value="${esc(m.name)}"></div>
           <div class="row">
             <input id="emCal" class="num" inputmode="decimal" value="${m.lazy?"":(m.cal??"")}" placeholder="Calories">
             <input id="emPro" class="num" inputmode="decimal" value="${m.lazy?"":(m.protein??"")}" placeholder="Protein g"></div>
@@ -130,8 +131,9 @@ function foodCard(d){
   const pPct = Math.min(100, t.protein/T.protein*100);
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
     <h3 style="margin-top:2px">Add meal</h3>
-    <div class="seg" id="lblseg">${lblChips}</div>
-    <div class="row"><input id="cmName" placeholder="What was it? (e.g. chipotle bowl)"></div>
+    <div class="row">
+      <select id="lblSel" style="flex:0 0 42%" onchange="pickLabel(this.value)">${lblOpts(S.mealLabel)}</select>
+      <input id="cmName" placeholder="What was it? (e.g. chipotle bowl)"></div>
     <div class="row" style="margin-top:8px">
       <input id="cmCal" class="num" inputmode="decimal" placeholder="Calories">
       <input id="cmPro" class="num" inputmode="decimal" placeholder="Protein g">
@@ -146,7 +148,7 @@ function foodCard(d){
     <div style="margin-top:12px"><button class="btn ${DB.mealsDone[d]?'done':''}" style="width:100%" onclick="toggleMealsDone()">${DB.mealsDone[d]?"✓ All meals logged for the day":"Mark all meals logged"}</button></div>
   </div>`;
 }
-export function pickLabel(l, el){ S.mealLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
+export function pickLabel(l){ S.mealLabel = l; }
 export function addCustom(lazy){
   const n=document.getElementById("cmName").value.trim();
   if(!n){ toast("Meal name required"); return; }
@@ -164,7 +166,7 @@ export function delMeal(i){ DB.meals[S.selDate].splice(i,1); if(S.editMeal===i) 
 export function toggleMealsDone(){ const d=S.selDate; if(DB.mealsDone[d]) delete DB.mealsDone[d]; else DB.mealsDone[d]=1; Store.save(); render(); }
 export function editMeal(i){ S.editMeal=i; S._editLabel=(DB.meals[S.selDate][i]||{}).label||"Other"; render(); }
 export function cancelMealEdit(){ S.editMeal=null; render(); }
-export function pickEditLabel(l, el){ S._editLabel=l; if(el) el.parentNode.querySelectorAll("button").forEach(b=>b.classList.toggle("on",b===el)); }
+export function pickEditLabel(l){ S._editLabel = l; }
 export function saveMealEdit(i){
   const m=DB.meals[S.selDate][i]; if(!m) return;
   const n=document.getElementById("emName").value.trim();
