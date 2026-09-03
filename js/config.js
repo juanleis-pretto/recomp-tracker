@@ -62,4 +62,4 @@ export const SUPA = {
   anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdoZHhvc2tyZW91dnNzcnhyc3BnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5ODYxMTIsImV4cCI6MjA5OTU2MjExMn0.d6vCsHRiNO325NkEZRJ7NAp4NH5WgDEUk0gvDdyJERM", // anon public key — safe in client, RLS guards data
 };
 
-export const MEAL_LABELS = ["Breakfast","Lunch","Snack","Dinner","Other"];
+export const MEAL_LABELS = ["Breakfast","Lunch","Snack","Dinner","Post Workout","Other"];

@@ -96,7 +96,10 @@ function foodCard(d){
     onclick="pickLabel('${l}',this)">${l}</button>`).join("");
   const groups = {};
   meals.forEach((m,i)=>{ const lbl=m.label||"Other"; (groups[lbl]=groups[lbl]||[]).push(i); });
-  const list = MEAL_LABELS.filter(lbl=>groups[lbl]).map(lbl=>{
+  // configured labels first, in program order, then anything else that's been logged — a label
+  // dropped from MEAL_LABELS must not make its meals disappear from the day
+  const order = [...MEAL_LABELS, ...Object.keys(groups).filter(l=>!MEAL_LABELS.includes(l))];
+  const list = order.filter(lbl=>groups[lbl]).map(lbl=>{
     const idxs = groups[lbl];
     const gCal = Math.round(idxs.reduce((a,i)=>a+(+meals[i].cal||0),0)*10)/10;
     const gPro = Math.round(idxs.reduce((a,i)=>a+(+meals[i].protein||0),0)*10)/10;
