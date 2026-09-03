@@ -142,7 +142,7 @@ function foodCard(d){
       <div class="bar"><i class="${t.cal>T.cal+60?'over':''}" style="width:${calPct}%"></i></div></div>
     <div class="tot"><div class="tl"><span>Protein</span><span><b>${t.protein}g</b> / ${T.protein}g</span></div>
       <div class="bar"><i class="${t.protein>=T.proteinFloor?'good':''}" style="width:${pPct}%"></i></div>
-      <div class="hint">${pLeft>0?pLeft+"g protein left to hit target"+(t.protein>=T.proteinFloor?" (floor of "+T.proteinFloor+"g met ✓)":""):"Protein target hit ✓"} · <a href="#" style="color:var(--accent)" onclick="go('export');return false">edit targets</a></div></div>
+      <div class="hint">${pLeft>0?pLeft+"g protein left to hit goal"+(t.protein>=T.proteinFloor?" (floor of "+T.proteinFloor+"g met ✓)":""):"Protein goal hit ✓"} · <a href="#" style="color:var(--accent)" onclick="go('export');return false">edit targets</a></div></div>
     <div style="margin-top:12px"><button class="btn ${DB.mealsDone[d]?'done':''}" style="width:100%" onclick="toggleMealsDone()">${DB.mealsDone[d]?"✓ All meals logged for the day":"Mark all meals logged"}</button></div>
   </div>`;
 }
@@ -661,11 +661,11 @@ export function viewExport(){
     <div class="muted" style="margin-bottom:8px">What the Log bars, the calendar colours and the Trends charts all measure against.</div>
     <div class="row">
       <div><label class="fl">Calories</label><input id="tgCal" class="num" inputmode="numeric" value="${T.cal}"></div>
-      <div><label class="fl">Protein (g)</label><input id="tgPro" class="num" inputmode="numeric" value="${T.protein}"></div>
-      <div><label class="fl">Floor (g)</label><input id="tgFloor" class="num" inputmode="numeric" value="${T.proteinFloor}"></div>
+      <div><label class="fl">Protein goal</label><input id="tgPro" class="num" inputmode="numeric" value="${T.protein}"></div>
+      <div><label class="fl">Protein floor</label><input id="tgFloor" class="num" inputmode="numeric" value="${T.proteinFloor}"></div>
     </div>
-    <div class="muted" style="margin-top:6px;font-size:12px">Protein has two numbers: the <b>target</b> is what you aim for, the <b>floor</b> is what you don't drop below. Trends and the Claude export flag days under the floor.</div>
-    ${T.proteinFloor>T.protein?`<div class="hint" style="color:var(--warn);margin-top:6px">Your floor is above your target, so every day that clears the floor also clears the target.</div>`:""}
+    <div class="muted" style="margin-top:6px;font-size:12px">Protein has two numbers, both in grams: the <b>goal</b> is what you aim for each day, the <b>floor</b> is what you don't drop below. Trends and the Claude export flag days under the floor.</div>
+    ${T.proteinFloor>T.protein?`<div class="hint" style="color:var(--warn);margin-top:6px">Your floor is above your goal, so every day that clears the floor also clears the goal.</div>`:""}
     <div class="row" style="margin-top:10px">
       <button class="btn primary" onclick="saveTargets()">Save targets</button>
       ${edited?`<button class="btn ghost fx" onclick="resetTargets()">Restore defaults</button>`:""}
