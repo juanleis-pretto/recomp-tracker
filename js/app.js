@@ -50,6 +50,7 @@ Object.assign(window, {
   addMakeup:V.addMakeup, removeMakeup:V.removeMakeup,
   saveRun:V.saveRun, toggleDone:V.toggleDone, saveBody:V.saveBody,
   pickLift:V.pickLift, renameEx:V.renameEx,
+  saveTargets:V.saveTargets, resetTargets:V.resetTargets,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,
   resetAll:V.resetAll, logout:V.logout,
 });

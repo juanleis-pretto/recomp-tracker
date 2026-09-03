@@ -3,6 +3,10 @@ import { DB } from "./store.js";
 import { today, dow, parseD, dstr, epley } from "./util.js";
 
 /* ---------- nutrition ---------- */
+// CFG.targets is the program default; anything the user edits in the app overrides it.
+// Everything reads targets() rather than CFG.targets so an edit lands everywhere at once.
+export function targets(){ return { ...CFG.targets, ...((DB.prefs && DB.prefs.targets) || {}) }; }
+
 export function dayTotals(date){
   const meals = DB.meals[date]||[];
   const t = meals.reduce((a,m)=>({cal:a.cal+(+m.cal||0), protein:a.protein+(+m.protein||0)}),{cal:0,protein:0});

@@ -2,7 +2,7 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
@@ -89,7 +89,7 @@ export function dismiss(k){ DB.dismissed[k]=1; Store.save(); render(); }
 function foodCard(d){
   const meals = DB.meals[d]||[];
   const t = dayTotals(d);
-  const T = CFG.targets;
+  const T = targets();
   const pLeft = Math.round(Math.max(0, T.protein - t.protein)*10)/10;
   const isCheat = dow(d)===CFG.cheatDay;
   const lblChips = MEAL_LABELS.map(l=>`<button class="${l===S.mealLabel?'on':''}"
@@ -139,7 +139,7 @@ function foodCard(d){
       <div class="bar"><i class="${t.cal>T.cal+60?'over':''}" style="width:${calPct}%"></i></div></div>
     <div class="tot"><div class="tl"><span>Protein</span><span><b>${t.protein}g</b> / ${T.protein}g</span></div>
       <div class="bar"><i class="${t.protein>=T.proteinFloor?'good':''}" style="width:${pPct}%"></i></div>
-      <div class="hint">${pLeft>0?pLeft+"g protein left to hit target"+(t.protein>=T.proteinFloor?" (floor of "+T.proteinFloor+"g met ✓)":""):"Protein target hit ✓"}</div></div>
+      <div class="hint">${pLeft>0?pLeft+"g protein left to hit target"+(t.protein>=T.proteinFloor?" (floor of "+T.proteinFloor+"g met ✓)":""):"Protein target hit ✓"} · <a href="#" style="color:var(--accent)" onclick="go('export');return false">edit targets</a></div></div>
     <div style="margin-top:12px"><button class="btn ${DB.mealsDone[d]?'done':''}" style="width:100%" onclick="toggleMealsDone()">${DB.mealsDone[d]?"✓ All meals logged for the day":"Mark all meals logged"}</button></div>
   </div>`;
 }
@@ -424,7 +424,7 @@ const CAL_COLORED = new Set(["done","over","partial","missed"]);
 // yellow logged but never marked complete
 function foodDayState(d){
   if (!DB.mealsDone[d]) return (DB.meals[d]&&DB.meals[d].length) ? "partial" : "none";
-  return dayTotals(d).cal > CFG.targets.cal ? "over" : "done";
+  return dayTotals(d).cal > targets().cal ? "over" : "done";
 }
 // consecutive days ending today with every meal logged. Today not yet marked doesn't break
 // the streak — the day isn't over — so counting starts from yesterday in that case.
@@ -448,7 +448,7 @@ const CAL_MODES = {
       const logged = c.done + c.over;
       return `<div class="s"><div class="v">${elapsed?logged+"/"+elapsed:"—"}</div><div class="k">days this month with all meals logged</div></div>
         <div class="s"><div class="v">${mealsDoneStreak()}</div><div class="k">day current streak</div></div>
-        <div class="s" style="grid-column:1/-1"><div class="v">${logged?c.done+"/"+logged:"—"}</div><div class="k">of those, at or under the ${CFG.targets.cal} cal target${c.over?` · ${c.over} over`:""}</div></div>`;
+        <div class="s" style="grid-column:1/-1"><div class="v">${logged?c.done+"/"+logged:"—"}</div><div class="k">of those, at or under the ${targets().cal} cal target${c.over?` · ${c.over} over`:""}</div></div>`;
     },
     note(c){ return c.partial ? `${c.partial} day${c.partial>1?"s":""} this month have food logged but were never marked complete — tap one to finish it off.` : ""; },
   },
@@ -607,7 +607,7 @@ export function renameEx(name){
 
 /* ================= TRENDS ================= */
 export function viewTrends(){
-  const T=CFG.targets;
+  const T=targets();
   const waistPts = Object.entries(DB.waist).sort().map(([d,v])=>[d,v]);
   let html = `<div class="card"><h2>Waist — the headline metric</h2>${lineChart([{pts:waistPts,color:"#3fb950",r:4,width:2.5}],{h:200})}`;
   if (waistPts.length>=2){
@@ -652,7 +652,24 @@ export function viewTrends(){
 
 /* ================= EXPORT ================= */
 export function viewExport(){
-  return `<div class="card"><h2>Export to Claude</h2>
+  const T = targets(), D = CFG.targets;
+  const edited = ["cal","protein","proteinFloor"].some(k=>T[k]!==D[k]);
+  return `<div class="card"><h2>Daily targets</h2>
+    <div class="muted" style="margin-bottom:8px">What the Log bars, the calendar colours and the Trends charts all measure against.</div>
+    <div class="row">
+      <div><label class="fl">Calories</label><input id="tgCal" class="num" inputmode="numeric" value="${T.cal}"></div>
+      <div><label class="fl">Protein (g)</label><input id="tgPro" class="num" inputmode="numeric" value="${T.protein}"></div>
+      <div><label class="fl">Floor (g)</label><input id="tgFloor" class="num" inputmode="numeric" value="${T.proteinFloor}"></div>
+    </div>
+    <div class="muted" style="margin-top:6px;font-size:12px">Protein has two numbers: the <b>target</b> is what you aim for, the <b>floor</b> is what you don't drop below. Trends and the Claude export flag days under the floor.</div>
+    ${T.proteinFloor>T.protein?`<div class="hint" style="color:var(--warn);margin-top:6px">Your floor is above your target, so every day that clears the floor also clears the target.</div>`:""}
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" onclick="saveTargets()">Save targets</button>
+      ${edited?`<button class="btn ghost fx" onclick="resetTargets()">Restore defaults</button>`:""}
+    </div>
+    ${edited?`<div class="muted" style="margin-top:6px;font-size:12px">Program defaults: ${D.cal} cal · ${D.protein}g protein · ${D.proteinFloor}g floor</div>`:""}
+  </div>
+  <div class="card"><h2>Export to Claude</h2>
     <div class="muted" style="margin-bottom:8px">Paste-ready summary of everything logged — targets, adherence, lift progression, body trend. Paste into Claude for a progress review.</div>
     <button class="btn primary" onclick="genClaude()">Generate summary</button>
     <button class="btn" onclick="copyClaude()">Copy</button>
@@ -670,8 +687,18 @@ export function viewExport(){
     ${Store.user?`<button class="btn ghost" onclick="logout()">Sign out</button>`:""}
   </div>`;
 }
+export function saveTargets(){
+  const cal=num(document.getElementById("tgCal").value);
+  const protein=num(document.getElementById("tgPro").value);
+  const proteinFloor=num(document.getElementById("tgFloor").value);
+  if(!(cal>0 && protein>0 && proteinFloor>0)){ toast("Each target needs a number above 0"); return; }
+  DB.prefs.targets = { cal, protein, proteinFloor };
+  Store.save(); render(); toast("Targets saved");
+}
+export function resetTargets(){ delete DB.prefs.targets; Store.save(); render(); toast("Back to program defaults"); }
+
 export function genClaude(){
-  const T=CFG.targets, days=lastNDays(30).filter(d=>d<=today());
+  const T=targets(), days=lastNDays(30).filter(d=>d<=today());
   let s=`# Fitness Progress Export — ${today()}\n\n`;
   s+=`Plan: 6-month recomp. Targets: ${T.cal} cal/day, ${T.protein}g protein (floor ${T.proteinFloor}g). Friday = planned cheat dinner.\n`;
   s+=`Primary metrics: waist, progressive overload on key lifts, protein adherence. Weight is secondary.\n\n`;
