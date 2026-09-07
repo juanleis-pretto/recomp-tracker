@@ -125,3 +125,4 @@ details.cust summary{font-size:13px;color:var(--accent);cursor:pointer;margin-to
 .cal-legend .sw.done{background:#12351c;border-color:#1f5c30;}
 .cal-legend .sw.over,.cal-legend .sw.missed{background:#3a1618;border-color:#6e2b2f;}
 .cal-legend .sw.partial{background:#2f2812;border-color:#5c4d1f;}
+.btn.fail{background:#3a1618;border-color:#6e2b2f;color:var(--bad);}

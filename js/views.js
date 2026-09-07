@@ -146,6 +146,7 @@ function foodCard(d){
       <div class="bar"><i class="${t.protein>=T.proteinFloor?'good':''}" style="width:${pPct}%"></i></div>
       <div class="hint">${pLeft>0?pLeft+"g protein left to hit goal"+(t.protein>=T.proteinFloor?" (floor of "+T.proteinFloor+"g met ✓)":""):"Protein goal hit ✓"} · <a href="#" style="color:var(--accent)" onclick="go('export');return false">edit targets</a></div></div>
     <div style="margin-top:12px"><button class="btn ${DB.mealsDone[d]?'done':''}" style="width:100%" onclick="toggleMealsDone()">${DB.mealsDone[d]?"✓ All meals logged for the day":"Mark all meals logged"}</button></div>
+    <div style="margin-top:8px"><button class="btn ${DB.failed[d]?'fail':''}" style="width:100%" onclick="toggleFailed()">${DB.failed[d]?"✕ Failed — ate out, over calories":"Mark day failed"}</button></div>
   </div>`;
 }
 export function pickLabel(l){ S.mealLabel = l; }
@@ -164,6 +165,7 @@ export function addCustom(lazy){
 }
 export function delMeal(i){ DB.meals[S.selDate].splice(i,1); if(S.editMeal===i) S.editMeal=null; Store.save(); render(); }
 export function toggleMealsDone(){ const d=S.selDate; if(DB.mealsDone[d]) delete DB.mealsDone[d]; else DB.mealsDone[d]=1; Store.save(); render(); }
+export function toggleFailed(){ const d=S.selDate; if(DB.failed[d]) delete DB.failed[d]; else DB.failed[d]=1; Store.save(); render(); }
 export function editMeal(i){ S.editMeal=i; S._editLabel=(DB.meals[S.selDate][i]||{}).label||"Other"; render(); }
 export function cancelMealEdit(){ S.editMeal=null; render(); }
 export function pickEditLabel(l){ S._editLabel = l; }
@@ -710,14 +712,24 @@ export function genClaude(){
   const wa=Object.entries(DB.waist).sort(), wt=Object.entries(DB.weight).sort();
   s+=`## Waist (${CFG.units.waist})\n`+(wa.length?wa.map(([d,v])=>`${d}: ${v}`).join("\n"):"none logged")+"\n\n";
   s+=`## Weight (${CFG.units.weight}) — last 30 entries\n`+(wt.length?wt.slice(-30).map(([d,v])=>`${d}: ${v}`).join("\n"):"none logged")+"\n\n";
-  s+=`## Nutrition — last 30 days (logged days only)\n`;
+  const failed = days.filter(d=>DB.failed[d]);
+  s+=`## Nutrition — last 30 days\n`;
+  s+=`FAILED = ate out and went over calories that day. Those days are usually unlogged or under-logged, so treat their totals as a floor on what was actually eaten, not a measurement.\n`;
+  s+=`Failed days: ${failed.length}/${days.length}${failed.length?` — ${failed.join(", ")}`:""}\n\n`;
   let any=false;
-  for(const d of days){ if(!DB.meals[d]||!DB.meals[d].length) continue; any=true;
-    const t=dayTotals(d); const cheat=dow(d)===CFG.cheatDay?" [cheat day]":"";
+  for(const d of days){
+    const meals = DB.meals[d]||[];
+    const isFailed = !!DB.failed[d];
+    if(!meals.length && !isFailed) continue;
+    any=true;
+    const cheat=dow(d)===CFG.cheatDay?" [cheat day]":"";
+    const fail=isFailed?" [FAILED — ate out, over calories]":"";
+    if(!meals.length){ s+=`${d}: nothing logged${cheat}${fail}\n`; continue; }
+    const t=dayTotals(d);
     const flag=t.protein>=T.proteinFloor?"":" ⚠ under protein floor";
     const complete=DB.mealsDone[d]?" [all meals logged]":" [may be incomplete]";
-    s+=`${d}: ${t.cal} cal, ${t.protein}g protein${cheat}${flag}${complete}\n`;
-    for(const m of DB.meals[d].filter(m=>!m.tid)) s+=`   ${m.label?m.label.toLowerCase()+": ":""}${m.name} (${m.lazy?"not counted — record only":`${m.cal} cal, ${m.protein}g`})\n`;
+    s+=`${d}: ${t.cal} cal, ${t.protein}g protein${cheat}${fail}${flag}${complete}\n`;
+    for(const m of meals.filter(m=>!m.tid)) s+=`   ${m.label?m.label.toLowerCase()+": ":""}${m.name} (${m.lazy?"not counted — record only":`${m.cal} cal, ${m.protein}g`})\n`;
   }
   if(!any) s+="none logged\n";
   s+="\n## Key lifts — full history (weight×reps per set, best e1RM)\n";
