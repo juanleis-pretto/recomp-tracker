@@ -28,6 +28,9 @@ export const CFG = {
       { n:"Seated cable row", sets:3, lo:10, hi:10, mus:"mid-back, lats, biceps" },
       { n:"Face pull",        sets:3, lo:15, hi:15, mus:"rear delts, upper back" },
       { n:"Dumbbell curl",    sets:3, lo:12, hi:12, mus:"biceps" },
+      // last on the day so a fried grip can't cost you reps on the rows and pulldowns.
+      // 2 sets x 30-45s is the 60-90s of accumulated hang time; a 3rd set still satisfies it.
+      { n:"Dead hang",        sets:2, lo:30, hi:45, unit:"sec", bw:true, note:"passive → active", mus:"grip, forearms, lats, shoulders" },
     ]},
     legs: { name:"Legs & Core", type:"lift", exercises:[
       { n:"Goblet squat",           sets:4, lo:10, hi:10, mus:"quads, glutes" },
