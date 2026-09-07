@@ -428,8 +428,11 @@ const CAL_DOW = ["M","T","W","T","F","S","S"];
 const CAL_COLORED = new Set(["done","over","partial","missed"]);
 
 // food: green fully logged at or under the calorie target, red fully logged but over it,
-// yellow logged but never marked complete
+// yellow logged but never marked complete. A day marked failed is red whatever its totals
+// say — eating out means the logged calories understate the day, so it counts as a logged
+// day over target rather than as a gap.
 function foodDayState(d){
+  if (DB.failed[d]) return "over";
   if (!DB.mealsDone[d]) return (DB.meals[d]&&DB.meals[d].length) ? "partial" : "none";
   return dayTotals(d).cal > targets().cal ? "over" : "done";
 }
@@ -450,6 +453,7 @@ const CAL_MODES = {
     mark:  { done:"✓", over:"▲" },
     label: { done:"all meals logged, on target", over:"all meals logged, over the calorie target",
              partial:"partly logged", none:"nothing logged" },
+    labelFor(d, st){ return DB.failed[d] ? "marked failed — ate out, over calories" : this.label[st]; },
     legend:[["done","all meals · on target"],["over","all meals · over"],["partial","partly logged"],["","nothing logged"]],
     stats(c, elapsed){
       const logged = c.done + c.over;
@@ -495,7 +499,8 @@ function calendarCard(){
     const st = future ? "future" : mode.state(d);
     if (!future){ elapsed++; elapsedDays.push(d); counts[st] = (counts[st]||0)+1; }
     const cls = ["cal-d", CAL_COLORED.has(st)?st:"", d===cur?"today":"", future?"future":""].filter(Boolean).join(" ");
-    cells += `<button class="${cls}" onclick="openDay('${d}')" aria-label="${fmtLong(d)} — ${mode.label[st]||""}">
+    const lbl = mode.labelFor ? mode.labelFor(d, st) : mode.label[st];
+    cells += `<button class="${cls}" onclick="openDay('${d}')" aria-label="${fmtLong(d)} — ${lbl||""}">
       <span class="cn">${n}</span><span class="cm">${mode.mark[st]||""}</span></button>`;
   }
   const label = new Date(y,m-1,1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
