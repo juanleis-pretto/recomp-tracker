@@ -9,6 +9,7 @@ const TABS = [
   { id:"lifts",   label:"Lifts",   ic:"⚒" },
   { id:"trends",  label:"Trends",  ic:"📈" },
   { id:"plan",    label:"Plan",    ic:"📋" },
+  { id:"meals",   label:"Meals",   ic:"🍽" },
   { id:"export",  label:"Export",  ic:"⇪" },
 ];
 let tab = "today";
@@ -20,7 +21,7 @@ function nav(){
 export function go(t){ tab=t; render(); window.scrollTo(0,0); }
 export function render(){
   nav();
-  const titles={today:"Log",history:"History",lifts:"Lift progression",trends:"Trends",plan:"Workout plan",export:"Export"};
+  const titles={today:"Log",history:"History",lifts:"Lift progression",trends:"Trends",plan:"Workout plan",meals:"Saved meals",export:"Export"};
   document.getElementById("hTitle").textContent = titles[tab];
   document.getElementById("hDate").textContent = fmtLong(tab==="today"?V.S.selDate:today());
   const m=document.getElementById("main");
@@ -29,6 +30,7 @@ export function render(){
   else if (tab==="lifts") m.innerHTML = V.viewLifts();
   else if (tab==="trends") m.innerHTML = V.viewTrends();
   else if (tab==="plan") m.innerHTML = V.viewPlan();
+  else if (tab==="meals") m.innerHTML = V.viewMeals();
   else m.innerHTML = V.viewExport();
 }
 
@@ -56,6 +58,8 @@ Object.assign(window, {
   saveTargets:V.saveTargets, resetTargets:V.resetTargets,
   setPlanDay:V.setPlanDay, setPlanSession:V.setPlanSession, planField:V.planField,
   planMove:V.planMove, planRemove:V.planRemove, planAdd:V.planAdd, planReset:V.planReset,
+  saveSaved:V.saveSaved, editSaved:V.editSaved, cancelSaved:V.cancelSaved,
+  delSaved:V.delSaved, logSaved:V.logSaved,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,
   resetAll:V.resetAll, logout:V.logout,
 });
