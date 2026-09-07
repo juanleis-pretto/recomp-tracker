@@ -131,13 +131,13 @@ function foodCard(d){
   const pPct = Math.min(100, t.protein/T.protein*100);
   const saved = savedList();
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
-    ${saved.length?`<h3 style="margin-top:2px">Saved meals</h3>
+    <label class="fl" style="margin-top:0">Meal — applies to whatever you log next</label>
+    <select id="lblSel" onchange="pickLabel(this.value)">${lblOpts(S.mealLabel)}</select>
+    ${saved.length?`<h3>Saved meals</h3>
     <div class="mealgrid">${saved.map(m=>`<button class="mealbtn" onclick="logSaved('${m.id}')">
-      <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g${m.label?` · ${esc(m.label)}`:""}</div></button>`).join("")}</div>`:""}
-    <h3${saved.length?"":' style="margin-top:2px"'}>Add meal</h3>
-    <div class="row">
-      <select id="lblSel" style="flex:0 0 42%" onchange="pickLabel(this.value)">${lblOpts(S.mealLabel)}</select>
-      <input id="cmName" placeholder="What was it? (e.g. chipotle bowl)"></div>
+      <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g</div></button>`).join("")}</div>`:""}
+    <h3>Add meal</h3>
+    <input id="cmName" placeholder="What was it? (e.g. chipotle bowl)">
     <div class="row" style="margin-top:8px">
       <input id="cmCal" class="num" inputmode="decimal" placeholder="Calories">
       <input id="cmPro" class="num" inputmode="decimal" placeholder="Protein g">
@@ -679,18 +679,13 @@ const savedList = () => Object.entries(DB.savedMeals)
 export function viewMeals(){
   const list = savedList();
   const ed = S.editSaved ? DB.savedMeals[S.editSaved] : null;
-  // "" = no fixed slot, so it takes whatever the Log tab's picker is set to
-  const lblOpts = ["", ...MEAL_LABELS].map(l=>
-    `<option value="${esc(l)}"${(ed?ed.label||"":"")===l?" selected":""}>${l||"— whatever the Log tab is set to —"}</option>`).join("");
   return `<div class="card"><h2>${ed?"Edit saved meal":"Add a saved meal"}</h2>
-    <div class="muted" style="margin-bottom:8px">A meal-prep serving or a standard plate, saved once. It then logs in one tap from the Log tab — tap it once per serving.</div>
+    <div class="muted" style="margin-bottom:8px">A meal-prep serving or a standard plate, saved once. It then logs in one tap from the Log tab — tap it once per serving. Which meal it counts as is picked there, when you log it.</div>
     <label class="fl">Name</label><input id="smName" value="${ed?esc(ed.name):""}" placeholder="e.g. 3 eggs">
     <div class="row" style="margin-top:8px">
       <div><label class="fl">Calories</label><input id="smCal" class="num" inputmode="decimal" value="${ed?ed.cal:""}"></div>
       <div><label class="fl">Protein (g)</label><input id="smPro" class="num" inputmode="decimal" value="${ed?ed.protein:""}"></div>
     </div>
-    <label class="fl">Usually eaten as</label>
-    <select id="smLabel">${lblOpts}</select>
     <div class="row" style="margin-top:10px">
       <button class="btn primary" onclick="saveSaved()">${ed?"Update":"Save meal"}</button>
       ${ed?`<button class="btn ghost fx" onclick="cancelSaved()">Cancel</button>`:""}
@@ -699,7 +694,7 @@ export function viewMeals(){
   <div class="card"><h2>Your saved meals${list.length?` (${list.length})`:""}</h2>
     ${list.length?list.map(m=>`<div class="li">
       <div style="cursor:pointer" onclick="editSaved('${m.id}')">${esc(m.name)}
-        <div class="sub">${m.cal} cal · ${m.protein}g protein${m.label?` · ${esc(m.label)}`:""} · <span style="color:var(--accent)">edit</span></div></div>
+        <div class="sub">${m.cal} cal · ${m.protein}g protein · <span style="color:var(--accent)">edit</span></div></div>
       <button class="del" onclick="delSaved('${m.id}')">✕</button></div>`).join("")
     :`<div class="center">Nothing saved yet. Add one above and it shows up on the Log tab.</div>`}
   </div>`;
@@ -711,8 +706,7 @@ export function saveSaved(){
   if(!cal){ toast("Enter calories"); return; }
   const editing = S.editSaved;
   const id = editing || "sm"+Date.now()+Math.random().toString(36).slice(2,5);
-  DB.savedMeals[id] = { name:n, cal, protein, label: document.getElementById("smLabel").value,
-                        t: (DB.savedMeals[id]||{}).t || Date.now() };
+  DB.savedMeals[id] = { name:n, cal, protein, t: (DB.savedMeals[id]||{}).t || Date.now() };
   S.editSaved = null;
   Store.save(); render(); toast(editing?"Updated":"Saved");
 }
@@ -725,11 +719,12 @@ export function delSaved(id){
   if (S.editSaved === id) S.editSaved = null;
   Store.save(); render();
 }
-// each tap logs one serving, so three servings is three taps and each stays separately deletable
+// each tap logs one serving, under whichever meal the Log tab's picker is on, so three servings
+// is three taps and each stays separately deletable
 export function logSaved(id){
   const m = DB.savedMeals[id]; if(!m) return;
   (DB.meals[S.selDate] = DB.meals[S.selDate] || []).push(
-    { label: m.label || S.mealLabel, name: m.name, cal: m.cal, protein: m.protein, t: Date.now() });
+    { label: S.mealLabel, name: m.name, cal: m.cal, protein: m.protein, t: Date.now() });
   Store.save(); render(); toast(`+ ${m.name}`);
 }
 

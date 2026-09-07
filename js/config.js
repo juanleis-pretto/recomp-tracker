@@ -2,12 +2,6 @@
 export const CFG = {
   targets: { cal: 1870, protein: 169, proteinFloor: 150 },
   units: { weight: "lb", waist: "in" },
-  mealTemplates: [
-    { id:"breakfast", name:"Breakfast — standard", detail:"3 eggs + 1c Greek yogurt", cal:360, protein:43 },
-    { id:"lunch",     name:"Lunch — standard",     detail:"6oz beef + rice + veg",    cal:620, protein:50 },
-    { id:"snack",     name:"Snack — standard",     detail:"Cottage cheese + fruit",   cal:270, protein:26 },
-    { id:"dinner",    name:"Dinner — standard",    detail:"8oz shrimp + pasta + veg + oil", cal:620, protein:50 },
-  ],
   cheatDay: 5, // Friday: restaurant dinner is part of the plan
   // Two segments logged within this window belong to the same workout.
   workoutWindowMs: 2 * 3600e3,
