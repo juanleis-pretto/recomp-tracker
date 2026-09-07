@@ -126,3 +126,15 @@ details.cust summary{font-size:13px;color:var(--accent);cursor:pointer;margin-to
 .cal-legend .sw.over,.cal-legend .sw.missed{background:#3a1618;border-color:#6e2b2f;}
 .cal-legend .sw.partial{background:#2f2812;border-color:#5c4d1f;}
 .btn.fail{background:#3a1618;border-color:#6e2b2f;color:var(--bad);}
+/* plan editor */
+.planseg{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.planseg button{padding:6px 2px;font-size:12px;border-radius:8px;}
+.planrow{border-top:1px solid var(--border);padding:10px 0;}
+.planrow .phead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.planrow .pn{font-size:15px;font-weight:600;min-width:0;}
+.planrow .pf{display:flex;gap:8px;align-items:end;margin-top:6px;}
+.planrow .pf label{flex:1;font-size:11px;color:var(--dim);display:block;}
+.planrow .pf input{margin-top:3px;}
+.planrow .pa{display:flex;gap:4px;flex:none;}
+.planrow .pa button{min-width:32px;padding:6px 7px;}
+nav button{font-size:11px;}

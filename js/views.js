@@ -2,11 +2,11 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets, sessions, programSplit, planEdited } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
-export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food" };
+export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food", planDay: new Date().getDay() };
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
@@ -25,7 +25,7 @@ function musclesSummary(exList){
 function dispName(name){ return (DB.aliases && DB.aliases[name]) || name; }
 // weekday(s) a session is scheduled for, e.g. push_b → "Friday"
 function sessionDays(sid){
-  return Object.entries(CFG.split).filter(([,v])=>v===sid).map(([k])=>DOW_NAMES[+k]).join("/");
+  return Object.entries(programSplit()).filter(([,v])=>v===sid).map(([k])=>DOW_NAMES[+k]).join("/");
 }
 // a set renders as "135×8" for weighted, or "12" / "45 sec" for bodyweight
 function unitOf(name){ const e=exDef(name); return e&&e.unit?" "+e.unit:""; }
@@ -50,7 +50,7 @@ export function setDate(v){ if(v){ S.selDate=v; S.addExSel=""; S.editMeal=null; 
 
 /* preview of a future day's prescribed session */
 function plannedCard(d){
-  const sid = CFG.split[dow(d)], s = CFG.sessions[sid];
+  const sid = programSplit()[dow(d)], s = sessions()[sid];
   const isCheat = dow(d)===CFG.cheatDay;
   let html = `<div class="card"><h2>Planned — ${esc(s.name)}</h2>`;
   if (s.type==="rest") html += `<div class="center">Rest day. Nothing on the calendar.</div>`;
@@ -206,28 +206,28 @@ function sessionExercisesHtml(d, s){
   }).join("");
 }
 function workoutCard(d){
-  const sid = CFG.split[dow(d)];
-  const s = CFG.sessions[sid];
+  const sid = programSplit()[dow(d)];
+  const s = sessions()[sid];
   const arr = blocks(d);
-  const makeup = (DB.makeup[d]||[]).filter(m=>CFG.sessions[m]);
-  const anyLiftShown = s.type==="lift" || makeup.some(m=>CFG.sessions[m].type==="lift");
-  const names = [s.type!=="rest"?s.name:null, ...makeup.map(m=>CFG.sessions[m].name)].filter(Boolean);
+  const makeup = (DB.makeup[d]||[]).filter(m=>sessions()[m]);
+  const anyLiftShown = s.type==="lift" || makeup.some(m=>sessions()[m].type==="lift");
+  const names = [s.type!=="rest"?s.name:null, ...makeup.map(m=>sessions()[m].name)].filter(Boolean);
   let html = `<div class="card"><h2>Workout${names.length?` — ${esc(names.join(" + "))}`:""}</h2>`;
   if (s.type==="rest" && !makeup.length) html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
 
-  const allEx = [...(s.exercises||[]), ...makeup.flatMap(m=>CFG.sessions[m].exercises||[])];
+  const allEx = [...(s.exercises||[]), ...makeup.flatMap(m=>sessions()[m].exercises||[])];
   html += musclesSummary(allEx);
   html += sessionExercisesHtml(d, s);
   // make-up sessions loaded onto this day
   makeup.forEach(m=>{
-    const ms = CFG.sessions[m];
+    const ms = sessions()[m];
     const mday=sessionDays(m);
     html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Made up: ${esc(ms.name)}${mday?` · ${mday}`:""}
       <a href="#" class="muted" style="color:var(--faint);font-size:12px" onclick="removeMakeup('${m}');return false">remove</a></h3>`;
     html += sessionExercisesHtml(d, ms);
   });
   // control to load a missed session's reference list onto this day
-  const loadable = Object.entries(CFG.sessions).filter(([id,ss])=>ss.type!=="rest" && id!==sid && !makeup.includes(id));
+  const loadable = Object.entries(sessions()).filter(([id,ss])=>ss.type!=="rest" && id!==sid && !makeup.includes(id));
   html += `<details class="cust" style="margin-top:10px"><summary>+ Make up a missed session</summary>
     <div class="muted" style="margin:4px 0 6px">Loads another day's exercise list here so you can log it with the same UI. Doesn't move your schedule.</div>
     <div class="mealgrid">${loadable.map(([id,ss])=>{
@@ -357,7 +357,7 @@ export function delActivity(bid, ai){
 export function addMakeup(sid){
   const arr = DB.makeup[S.selDate] = DB.makeup[S.selDate] || [];
   if(!arr.includes(sid)) arr.push(sid);
-  Store.save(); render(); toast(`Loaded ${CFG.sessions[sid].name}`);
+  Store.save(); render(); toast(`Loaded ${sessions()[sid].name}`);
 }
 export function removeMakeup(sid){
   const arr = DB.makeup[S.selDate]; if(!arr) return;
@@ -660,6 +660,116 @@ export function viewTrends(){
     <div class="s"><div class="v">${days.length-fullyLoggedDays}</div><div class="k">days without all meals logged</div></div>
   </div></div>`;
   return html;
+}
+
+/* ================= PLAN ================= */
+const PLAN_DOW = [1,2,3,4,5,6,0];                 // Mon-first, matching the calendars
+// A session's exercises, copied into DB.plan the first time you touch it so the shipped
+// program in CFG stays intact and "restore defaults" is just a delete.
+function planExercises(sid){
+  DB.plan.sessions = DB.plan.sessions || {};
+  const cur = DB.plan.sessions[sid] || {};
+  if (!cur.exercises) cur.exercises = ((sessions()[sid] || {}).exercises || []).map(e=>({...e}));
+  DB.plan.sessions[sid] = cur;
+  return cur.exercises;
+}
+const planInt = (v, lo=1) => Math.max(lo, Math.round(num(v)) || lo);
+
+export function viewPlan(){
+  const sp = programSplit(), all = sessions(), dw = S.planDay, sid = sp[dw], s = all[sid] || {};
+  const tabs = PLAN_DOW.map(d=>`<button class="${d===dw?'on':''}" onclick="setPlanDay(${d})">${DOW_NAMES[d].slice(0,3)}</button>`).join("");   // 7 across, so no wrap
+  const opts = Object.entries(all).map(([id,ss])=>
+    `<option value="${id}"${id===sid?" selected":""}>${esc(ss.name)}</option>`).join("");
+  // sessions are shared, so editing one changes every weekday pointed at it
+  const alsoOn = Object.entries(sp).filter(([k,v])=>v===sid && +k!==dw).map(([k])=>DOW_NAMES[+k]);
+
+  let body = "";
+  if (s.type === "lift"){
+    const ex = s.exercises || [];
+    body += ex.map((e,i)=>`<div class="planrow">
+      <div class="phead">
+        <div class="pn">${esc(dispName(e.n))}${e.bw?' <span class="badge">bodyweight</span>':""}
+          ${e.mus?`<div class="sub" style="color:var(--faint)">💪 ${esc(e.mus)}</div>`:""}</div>
+        <div class="pa">
+          <button class="btn small ghost" ${i?"":"disabled style=opacity:.3"} onclick="planMove('${sid}',${i},-1)">↑</button>
+          <button class="btn small ghost" ${i<ex.length-1?"":"disabled style=opacity:.3"} onclick="planMove('${sid}',${i},1)">↓</button>
+          <button class="btn small ghost" onclick="planRemove('${sid}',${i})">✕</button>
+        </div>
+      </div>
+      <div class="pf">
+        <label>sets<input class="num" inputmode="numeric" value="${e.sets}" onchange="planField('${sid}',${i},'sets',this.value)"></label>
+        <label>from<input class="num" inputmode="numeric" value="${e.lo}" onchange="planField('${sid}',${i},'lo',this.value)"></label>
+        <label>to<input class="num" inputmode="numeric" value="${e.hi}" onchange="planField('${sid}',${i},'hi',this.value)"></label>
+        <span class="sub" style="align-self:end;padding-bottom:10px">${e.unit||"reps"}</span>
+      </div></div>`).join("");
+    if (!ex.length) body += `<div class="center" style="color:var(--warn)">No exercises — this session can never count as complete. Add one below or restore defaults.</div>`;
+    const have = new Set(ex.map(e=>e.n));
+    const addable = allLoggedExercises().filter(n=>!have.has(n)).sort();
+    body += `<h3>Add exercise</h3>
+      <div class="row"><select id="planPick">${addable.map(n=>`<option value="${esc(n)}">${esc(dispName(n))}</option>`).join("")}<option value="">— or type a new one —</option></select>
+      <button class="btn primary fx" onclick="planAdd('${sid}')">Add</button></div>
+      <input id="planNew" placeholder="New exercise name (leave blank to use the list)" style="margin-top:8px">`;
+  } else if (s.type === "run"){
+    body = `<div class="muted">Run session — ${esc(s.detail||"")}. Runs are logged by distance and duration, so there's nothing to edit here.</div>`;
+  } else {
+    body = `<div class="muted">Rest day. Anything you log on a rest day still counts; it just isn't measured against a prescription.</div>`;
+  }
+
+  return `<div class="card">
+    <h2>Weekday</h2>
+    <div class="seg planseg">${tabs}</div>
+    <h3 style="margin-top:4px">${DOW_NAMES[dw]}</h3>
+    <select onchange="setPlanSession(${dw},this.value)">${opts}</select>
+    ${alsoOn.length?`<div class="muted" style="margin-top:6px;color:var(--warn)">This session is also used on ${esc(alsoOn.join(", "))} — edits below apply to those days too.</div>`:""}
+  </div>
+  <div class="card"><h2>${esc(s.name||"Session")}</h2>${body}</div>
+  <div class="card"><h2>How edits apply</h2>
+    <div class="muted">The plan is scored live, so a change applies to days you've <b>already logged</b> as well as future ones: add an exercise and past days that didn't include it stop counting as complete on the workout calendar. Nothing you logged is deleted or altered — removing an exercise keeps its history on the Lifts tab.</div>
+    ${planEdited()?`<div style="margin-top:10px"><button class="btn ghost" onclick="planReset()">Restore the shipped program</button></div>`:`<div class="muted" style="margin-top:8px;color:var(--faint)">Currently unchanged from the shipped program.</div>`}
+  </div>`;
+}
+export function setPlanDay(d){ S.planDay = d; render(); }
+export function setPlanSession(dw, sid){
+  DB.plan.split = DB.plan.split || {};
+  DB.plan.split[dw] = sid;
+  Store.save(); render();
+}
+// field edits don't re-render: that would blur the input mid-typing
+export function planField(sid, i, key, v){
+  const ex = planExercises(sid); if(!ex[i]) return;
+  ex[i][key] = planInt(v);
+  if (key === "lo" && ex[i].hi < ex[i].lo) ex[i].hi = ex[i].lo;
+  if (key === "hi" && ex[i].hi < ex[i].lo) ex[i].lo = ex[i].hi;
+  Store.save();
+}
+export function planMove(sid, i, dir){
+  const ex = planExercises(sid), j = i + dir;
+  if (j < 0 || j >= ex.length) return;
+  [ex[i], ex[j]] = [ex[j], ex[i]];
+  Store.save(); render();
+}
+export function planRemove(sid, i){
+  const ex = planExercises(sid);
+  const e = ex[i]; if(!e) return;
+  if (!confirm(`Remove ${dispName(e.n)} from this session?\n\nSets you've already logged are kept — this only changes what the day is measured against.`)) return;
+  ex.splice(i,1);
+  Store.save(); render();
+}
+export function planAdd(sid){
+  const typed = (document.getElementById("planNew").value||"").trim();
+  const name = typed || document.getElementById("planPick").value;
+  if (!name){ toast("Pick an exercise or type a name"); return; }
+  const ex = planExercises(sid);
+  if (ex.some(e=>e.n===name)){ toast("Already in this session"); return; }
+  const def = exDef(name);
+  // reuse the known definition so units and bodyweight flags carry over
+  ex.push(def ? {...def} : { n:name, sets:3, lo:10, hi:10 });
+  Store.save(); render(); toast(`Added ${dispName(name)}`);
+}
+export function planReset(){
+  if (!confirm("Restore the shipped program?\n\nYour logged workouts are untouched — this only resets what each day prescribes.")) return;
+  DB.plan = {};
+  Store.save(); render(); toast("Program restored");
 }
 
 /* ================= EXPORT ================= */

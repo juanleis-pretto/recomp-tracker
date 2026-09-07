@@ -62,4 +62,15 @@ Workout model: `workouts[date]` is an array of **blocks** (a workout). A set log
 
 ## Changing the program
 
-Edit `CFG` in `js/config.js`, push to `main` (auto-deploys) or `npx vercel --prod`.
+The **Plan** tab edits it in the app: pick a weekday, swap which session it runs, and
+add/remove/reorder its exercises or change sets and rep ranges. Edits are stored in the synced
+doc as overrides on top of `CFG`, so "restore the shipped program" is just a delete.
+
+The plan is scored **live**, which is deliberate: past days are measured against the plan as it
+stands now, so adding an exercise makes days that didn't include it stop counting as complete.
+Nothing logged is ever touched — removing an exercise keeps its history, and its old sets still
+render with the right units because `allExercises()` falls back to the shipped definitions.
+
+For a permanent change to the defaults (or to edit the targets, meal templates, or units), edit
+`CFG` in `js/config.js` and push to `main` (auto-deploys) or `npx vercel --prod`. Note a saved
+plan override wins over `CFG` for whatever it covers.

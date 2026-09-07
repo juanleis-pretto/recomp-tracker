@@ -2,6 +2,23 @@ import { CFG } from "./config.js";
 import { DB } from "./store.js";
 import { today, dow, parseD, dstr, epley } from "./util.js";
 
+/* ---------- program (shipped defaults + your edits) ----------
+   CFG holds the program as shipped; DB.plan holds whatever the Plan tab changed. Everything
+   reads sessions()/programSplit() rather than the config directly, so an edit lands
+   everywhere at once — including backwards: past days are always scored against the plan as
+   it stands now, which is what makes adding an exercise mark earlier days as not having
+   followed it. */
+export function sessions(){
+  const out = { ...CFG.sessions }, ov = (DB.plan && DB.plan.sessions) || {};
+  for (const [id, s] of Object.entries(ov)) out[id] = { ...(CFG.sessions[id] || {}), ...s };
+  return out;
+}
+export function programSplit(){ return { ...CFG.split, ...((DB.plan && DB.plan.split) || {}) }; }
+export function planEdited(){
+  const p = DB.plan || {};
+  return !!(Object.keys(p.sessions || {}).length || Object.keys(p.split || {}).length);
+}
+
 /* ---------- nutrition ---------- */
 // CFG.targets is the program default; anything the user edits in the app overrides it.
 // Everything reads targets() rather than CFG.targets so an edit lands everywhere at once.
@@ -57,10 +74,12 @@ export function blockHasContent(b){
 // count, or any run data for a run session? (independent of whether `d` is that session's own
 // scheduled day, so it can also check a makeup day.)
 function sessionSatisfiedOnDay(d, sid){
-  const s = CFG.sessions[sid];
+  const s = sessions()[sid];
   if (!s || s.type==="rest") return false;
   if (s.type==="run") return blocks(d).some(b=>b.run && (b.run.dist||b.run.dur));
-  if (s.type==="lift") return s.exercises.every(ex=>daySetCount(d, ex.n) >= ex.sets);
+  // an emptied session satisfies nothing: every() on [] is true, which would green up every
+  // past day the moment the last exercise came out of a session
+  if (s.type==="lift") return !!(s.exercises||[]).length && s.exercises.every(ex=>daySetCount(d, ex.n) >= ex.sets);
   return false;
 }
 // workout adherence, credited per calendar week (Mon–Sun, matching the split — Sunday is the rest
@@ -75,8 +94,8 @@ export function adherence(days){
   for (const week of weeks){
     const seen=new Set();
     for (const d of week){
-      const sid = CFG.split[dow(d)];
-      if (!CFG.sessions[sid] || CFG.sessions[sid].type==="rest" || seen.has(sid)) continue;
+      const sid = programSplit()[dow(d)], all = sessions();
+      if (!all[sid] || all[sid].type==="rest" || seen.has(sid)) continue;
       seen.add(sid); need++;
       const done = week.some(d2 => (d2===d || (DB.makeup[d2]||[]).includes(sid)) && sessionSatisfiedOnDay(d2, sid));
       if (done) got++;
@@ -106,7 +125,7 @@ function madeUpInWeek(d, sid){
    session gets made up later in the same week. */
 export function workoutDayState(d){
   if (d > today()) return "future";
-  const sid = CFG.split[dow(d)], own = CFG.sessions[sid];
+  const sid = programSplit()[dow(d)], own = sessions()[sid];
   const prescribed = own && own.type !== "rest";
   if (prescribed && sessionSatisfiedOnDay(d, sid)) return "done";
   if ((DB.makeup[d]||[]).some(m => sessionSatisfiedOnDay(d, m))) return "done";
@@ -118,9 +137,12 @@ export function workoutDayState(d){
 /* ---------- exercise catalog & progression ---------- */
 export function allExercises(){
   const seen={}, out=[];
-  for (const s of Object.values(CFG.sessions)) if(s.exercises)
-    for (const e of s.exercises) if(!seen[e.n]){ seen[e.n]=1; out.push(e); }
-  for (const e of (CFG.extraExercises||[])) if(!seen[e.n]){ seen[e.n]=1; out.push(e); }
+  const push = e => { if(!seen[e.n]){ seen[e.n]=1; out.push(e); } };
+  // plan first so edited sets/reps win, then the shipped program so a move dropped from the
+  // plan keeps its unit/bodyweight metadata and its old history still renders correctly
+  for (const s of Object.values(sessions())) if(s.exercises) s.exercises.forEach(push);
+  for (const s of Object.values(CFG.sessions)) if(s.exercises) s.exercises.forEach(push);
+  for (const e of (CFG.extraExercises||[])) push(e);
   return out;
 }
 export function exDef(name){ return allExercises().find(e=>e.n===name) || null; }
@@ -133,7 +155,7 @@ export function allLoggedExercises(){
   return [...names];
 }
 export function exPrescription(name){
-  for (const s of Object.values(CFG.sessions))
+  for (const s of Object.values(sessions()))
     if (s.exercises){ const e=s.exercises.find(e=>e.n===name); if(e) return e; }
   return null;
 }
