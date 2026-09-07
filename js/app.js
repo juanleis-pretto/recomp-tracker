@@ -1,6 +1,7 @@
 import { Store } from "./store.js";
 import { today, fmtLong } from "./util.js";
 import * as V from "./views.js";
+import { backfillCompletion } from "./data.js";
 
 const TABS = [
   { id:"today",   label:"Log",     ic:"☰" },
@@ -60,10 +61,11 @@ Object.assign(window, {
 });
 
 V.init(render, go);
-Store.onChange = render;
+// stamp pre-existing days once the doc has settled (local, or after the first pull)
+Store.onChange = ()=>{ backfillCompletion(); render(); };
 Store.onAuthNeeded = ()=>showLogin(true);
 window.addEventListener("online", ()=>{ if (localStorage.getItem(Store.DIRTY)==="1") Store.push(); });
 document.addEventListener("visibilitychange", ()=>{ if (!document.hidden && localStorage.getItem(Store.DIRTY)==="1") Store.push(); });
 
 render();
-Store.init();
+Store.init().then(()=>{ if (backfillCompletion()) render(); });

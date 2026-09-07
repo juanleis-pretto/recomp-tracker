@@ -66,10 +66,20 @@ The **Plan** tab edits it in the app: pick a weekday, swap which session it runs
 add/remove/reorder its exercises or change sets and rep ranges. Edits are stored in the synced
 doc as overrides on top of `CFG`, so "restore the shipped program" is just a delete.
 
-The plan is scored **live**, which is deliberate: past days are measured against the plan as it
-stands now, so adding an exercise makes days that didn't include it stop counting as complete.
-Nothing logged is ever touched — removing an exercise keeps its history, and its old sets still
-render with the right units because `allExercises()` falls back to the shipped definitions.
+Editing the plan never rewrites history, because completion is **recorded, not re-derived**.
+When you log, `refreshCompletion(date)` checks the day's work against the plan and stamps
+`completed[date]` with the session ids it finished; the calendar and `adherence()` read that
+stamp. So adding an exercise today changes what counts from here on and leaves last week's
+green days green. A session made up onto a day completes that day the same way its own session
+would — finish Tuesday's run on Wednesday and Wednesday is the day that gets stamped.
+
+`backfillCompletion()` stamps days logged before this existed, once per doc. It skips entirely
+while there are no workouts: on a fresh device it would otherwise run before the first sync and
+save an empty doc, marking it dirty so it could win the next push. Staying quiet also means it
+still fires later, when workouts arrive from a pull or a JSON import.
+
+A shipped exercise can carry `from`/`until` (YYYY-MM-DD) to date it into or out of the program —
+that's what keeps the backfill honest about days that predate it (dead hangs, added 2026-09-07).
 
 For a permanent change to the defaults (or to edit the targets, meal templates, or units), edit
 `CFG` in `js/config.js` and push to `main` (auto-deploys) or `npx vercel --prod`. Note a saved

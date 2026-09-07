@@ -11,7 +11,9 @@ export const CFG = {
   cheatDay: 5, // Friday: restaurant dinner is part of the plan
   // Two segments logged within this window belong to the same workout.
   workoutWindowMs: 2 * 3600e3,
-  // sessions: reps `hi` = top of rep range → progression trigger
+  // sessions: reps `hi` = top of rep range → progression trigger.
+  // `from`/`until` (YYYY-MM-DD) date an exercise into or out of the program, so days before
+  // it was added aren't scored against it. Omit both and it has always been prescribed.
   sessions: {
     push_a: { name:"Push (chest emphasis)", type:"lift", exercises:[
       { n:"Dumbbell bench press",           sets:4, lo:8,  hi:8,  mus:"chest, triceps, front delts" },
@@ -30,7 +32,7 @@ export const CFG = {
       { n:"Dumbbell curl",    sets:3, lo:12, hi:12, mus:"biceps" },
       // last on the day so a fried grip can't cost you reps on the rows and pulldowns.
       // 2 sets x 30-45s is the 60-90s of accumulated hang time; a 3rd set still satisfies it.
-      { n:"Dead hang",        sets:2, lo:30, hi:45, unit:"sec", bw:true, note:"passive → active", mus:"grip, forearms, lats, shoulders" },
+      { n:"Dead hang",        sets:2, lo:30, hi:45, unit:"sec", bw:true, note:"passive → active", from:"2026-09-07", mus:"grip, forearms, lats, shoulders" },
     ]},
     legs: { name:"Legs & Core", type:"lift", exercises:[
       { n:"Goblet squat",           sets:4, lo:10, hi:10, mus:"quads, glutes" },

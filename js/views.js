@@ -2,7 +2,7 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets, sessions, programSplit, planEdited } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets, sessions, programSplit, planEdited, refreshCompletion, backfillCompletion } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
@@ -50,7 +50,7 @@ export function setDate(v){ if(v){ S.selDate=v; S.addExSel=""; S.editMeal=null; 
 
 /* preview of a future day's prescribed session */
 function plannedCard(d){
-  const sid = programSplit()[dow(d)], s = sessions()[sid];
+  const sid = programSplit(d)[dow(d)], s = sessions(d)[sid];
   const isCheat = dow(d)===CFG.cheatDay;
   let html = `<div class="card"><h2>Planned — ${esc(s.name)}</h2>`;
   if (s.type==="rest") html += `<div class="center">Rest day. Nothing on the calendar.</div>`;
@@ -206,28 +206,29 @@ function sessionExercisesHtml(d, s){
   }).join("");
 }
 function workoutCard(d){
-  const sid = programSplit()[dow(d)];
-  const s = sessions()[sid];
+  const sid = programSplit(d)[dow(d)];
+  const prog = sessions(d);
+  const s = prog[sid];
   const arr = blocks(d);
-  const makeup = (DB.makeup[d]||[]).filter(m=>sessions()[m]);
-  const anyLiftShown = s.type==="lift" || makeup.some(m=>sessions()[m].type==="lift");
-  const names = [s.type!=="rest"?s.name:null, ...makeup.map(m=>sessions()[m].name)].filter(Boolean);
+  const makeup = (DB.makeup[d]||[]).filter(m=>prog[m]);
+  const anyLiftShown = s.type==="lift" || makeup.some(m=>prog[m].type==="lift");
+  const names = [s.type!=="rest"?s.name:null, ...makeup.map(m=>prog[m].name)].filter(Boolean);
   let html = `<div class="card"><h2>Workout${names.length?` — ${esc(names.join(" + "))}`:""}</h2>`;
   if (s.type==="rest" && !makeup.length) html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
 
-  const allEx = [...(s.exercises||[]), ...makeup.flatMap(m=>sessions()[m].exercises||[])];
+  const allEx = [...(s.exercises||[]), ...makeup.flatMap(m=>prog[m].exercises||[])];
   html += musclesSummary(allEx);
   html += sessionExercisesHtml(d, s);
   // make-up sessions loaded onto this day
   makeup.forEach(m=>{
-    const ms = sessions()[m];
+    const ms = prog[m];
     const mday=sessionDays(m);
     html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Made up: ${esc(ms.name)}${mday?` · ${mday}`:""}
       <a href="#" class="muted" style="color:var(--faint);font-size:12px" onclick="removeMakeup('${m}');return false">remove</a></h3>`;
     html += sessionExercisesHtml(d, ms);
   });
   // control to load a missed session's reference list onto this day
-  const loadable = Object.entries(sessions()).filter(([id,ss])=>ss.type!=="rest" && id!==sid && !makeup.includes(id));
+  const loadable = Object.entries(prog).filter(([id,ss])=>ss.type!=="rest" && id!==sid && !makeup.includes(id));
   html += `<details class="cust" style="margin-top:10px"><summary>+ Make up a missed session</summary>
     <div class="muted" style="margin:4px 0 6px">Loads another day's exercise list here so you can log it with the same UI. Doesn't move your schedule.</div>
     <div class="mealgrid">${loadable.map(([id,ss])=>{
@@ -333,6 +334,7 @@ export function addSet(){
   const b = attachBlock(S.selDate, S._forceNew); S._forceNew=false;
   const set={w:wv, r:rv}; if(note) set.note=note;
   (b.sets[S.addExSel]=b.sets[S.addExSel]||[]).push(set);
+  refreshCompletion(S.selDate);
   Store.save(); render();
 }
 // selDate (YYYY-MM-DD) + "HH:MM" → epoch ms
@@ -348,27 +350,28 @@ export function addActivity(){
   if(timeStr){ const ts=tsFromTime(S.selDate,timeStr); b=newBlock(S.selDate); b.t0=ts; b.t1=ts; }
   else { b = attachBlock(S.selDate, S._forceNew); S._forceNew=false; }
   (b.activities=b.activities||[]).push({name, dur, kcal, note});
-  Store.save(); render();
+  refreshCompletion(S.selDate); Store.save(); render();
 }
 export function delActivity(bid, ai){
   const b = blocks(S.selDate).find(x=>x.id===bid);
-  if(b&&b.activities){ b.activities.splice(ai,1); if(!b.activities.length) delete b.activities; pruneEmptyBlocks(S.selDate); Store.save(); render(); }
+  if(b&&b.activities){ b.activities.splice(ai,1); if(!b.activities.length) delete b.activities; pruneEmptyBlocks(S.selDate); refreshCompletion(S.selDate); Store.save(); render(); }
 }
 export function addMakeup(sid){
   const arr = DB.makeup[S.selDate] = DB.makeup[S.selDate] || [];
   if(!arr.includes(sid)) arr.push(sid);
+  refreshCompletion(S.selDate);
   Store.save(); render(); toast(`Loaded ${sessions()[sid].name}`);
 }
 export function removeMakeup(sid){
   const arr = DB.makeup[S.selDate]; if(!arr) return;
   const i = arr.indexOf(sid); if(i>=0) arr.splice(i,1);
   if(!arr.length) delete DB.makeup[S.selDate];
-  Store.save(); render();
+  refreshCompletion(S.selDate); Store.save(); render();
 }
 export function startNewWorkout(){ S._forceNew=true; toast("Next set starts a new workout"); render(); }
 export function delLastSet(bid, n){
   const b = blocks(S.selDate).find(x=>x.id===bid);
-  if(b&&b.sets[n]){ b.sets[n].pop(); if(!b.sets[n].length) delete b.sets[n]; pruneEmptyBlocks(S.selDate); Store.save(); render(); }
+  if(b&&b.sets[n]){ b.sets[n].pop(); if(!b.sets[n].length) delete b.sets[n]; pruneEmptyBlocks(S.selDate); refreshCompletion(S.selDate); Store.save(); render(); }
 }
 export function saveRun(){
   const dist=num(document.getElementById("rDist").value);
@@ -381,6 +384,7 @@ export function saveRun(){
   if(!b){ b = attachBlock(S.selDate, S._forceNew); S._forceNew=false; }
   b.run = { dist, dur, note, kcal };
   b.t1 = Date.now();
+  refreshCompletion(S.selDate);
   Store.save(); render(); toast("Run saved");
 }
 export function toggleDone(bid){
@@ -724,7 +728,7 @@ export function viewPlan(){
   </div>
   <div class="card"><h2>${esc(s.name||"Session")}</h2>${body}</div>
   <div class="card"><h2>How edits apply</h2>
-    <div class="muted">The plan is scored live, so a change applies to days you've <b>already logged</b> as well as future ones: add an exercise and past days that didn't include it stop counting as complete on the workout calendar. Nothing you logged is deleted or altered — removing an exercise keeps its history on the Lifts tab.</div>
+    <div class="muted">A day is marked complete <b>when you log it</b>, and that mark is kept. Editing the plan changes what counts from here on and leaves days you've already finished alone — last week's green days stay green. Nothing logged is deleted either: removing an exercise keeps its history on the Lifts tab.</div>
     ${planEdited()?`<div style="margin-top:10px"><button class="btn ghost" onclick="planReset()">Restore the shipped program</button></div>`:`<div class="muted" style="margin-top:8px;color:var(--faint)">Currently unchanged from the shipped program.</div>`}
   </div>`;
 }
@@ -899,7 +903,7 @@ export function impJSON(inp){
       if (!confirm("Replace ALL current data with this file (local + server)?")) return;
       for (const k of DOC_KEYS) DB[k] = doc[k] || {};
       Store.migrate(DB);
-      Store.save(); render(); toast("Imported");
+      backfillCompletion(); Store.save(); render(); toast("Imported");
     } catch(e){ toast("Not a valid export file"); }
   });
 }
