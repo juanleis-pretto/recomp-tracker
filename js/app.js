@@ -59,7 +59,7 @@ Object.assign(window, {
   setPlanDay:V.setPlanDay, setPlanSession:V.setPlanSession, planField:V.planField,
   planMove:V.planMove, planRemove:V.planRemove, planAdd:V.planAdd, planReset:V.planReset,
   saveSaved:V.saveSaved, editSaved:V.editSaved, cancelSaved:V.cancelSaved,
-  delSaved:V.delSaved, logSaved:V.logSaved,
+  delSaved:V.delSaved, fillSaved:V.fillSaved,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,
   resetAll:V.resetAll, logout:V.logout,
 });

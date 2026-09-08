@@ -131,19 +131,20 @@ function foodCard(d){
   const pPct = Math.min(100, t.protein/T.protein*100);
   const saved = savedList();
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
-    <label class="fl" style="margin-top:0">Meal — applies to whatever you log next</label>
-    <select id="lblSel" onchange="pickLabel(this.value)">${lblOpts(S.mealLabel)}</select>
-    ${saved.length?`<h3>Saved meals</h3>
-    <div class="mealgrid">${saved.map(m=>`<button class="mealbtn" onclick="logSaved('${m.id}')">
+    ${saved.length?`<h3 style="margin-top:2px">Saved meals</h3>
+    <div class="muted" style="margin:-4px 0 6px">Tap one to fill the form below — nothing is logged until you press Add.</div>
+    <div class="mealgrid">${saved.map(m=>`<button class="mealbtn" onclick="fillSaved('${m.id}')">
       <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g</div></button>`).join("")}</div>`:""}
-    <h3>Add meal</h3>
-    <input id="cmName" placeholder="What was it? (e.g. chipotle bowl)">
+    <h3${saved.length?"":' style="margin-top:2px"'}>Add meal</h3>
+    <div class="row">
+      <select id="lblSel" style="flex:0 0 42%" onchange="pickLabel(this.value)">${lblOpts(S.mealLabel)}</select>
+      <input id="cmName" placeholder="What was it? (e.g. chipotle bowl)"></div>
     <div class="row" style="margin-top:8px">
       <input id="cmCal" class="num" inputmode="decimal" placeholder="Calories">
       <input id="cmPro" class="num" inputmode="decimal" placeholder="Protein g">
       <button class="btn primary fx" onclick="addCustom()">Add</button></div>
     <div style="margin-top:6px"><a href="#" class="muted" style="color:var(--accent)" onclick="addCustom(true);return false">+ Log meal without calories (record only)</a></div>
-    ${saved.length?"":`<div class="muted" style="margin-top:10px">Eating the same prepped serving repeatedly? Save it once on the <a href="#" style="color:var(--accent)" onclick="go('meals');return false">Meals tab</a> and log it in one tap.</div>`}
+    ${saved.length?"":`<div class="muted" style="margin-top:10px">Eating the same prepped serving repeatedly? Save it once on the <a href="#" style="color:var(--accent)" onclick="go('meals');return false">Meals tab</a> and it fills the form with one tap.</div>`}
     ${list?`<div class="loggedlist">${list}</div>`:""}
     <div class="tot"><div class="tl"><span>Calories</span><span><b>${t.cal}</b> / ${T.cal}</span></div>
       <div class="bar"><i class="${t.cal>T.cal+60?'over':''}" style="width:${calPct}%"></i></div></div>
@@ -680,7 +681,7 @@ export function viewMeals(){
   const list = savedList();
   const ed = S.editSaved ? DB.savedMeals[S.editSaved] : null;
   return `<div class="card"><h2>${ed?"Edit saved meal":"Add a saved meal"}</h2>
-    <div class="muted" style="margin-bottom:8px">A meal-prep serving or a standard plate, saved once. It then logs in one tap from the Log tab — tap it once per serving. Which meal it counts as is picked there, when you log it.</div>
+    <div class="muted" style="margin-bottom:8px">A meal-prep serving or a standard plate, saved once. Tap it on the Log tab to fill in the name and macros, then pick which meal it counts as and press Add.</div>
     <label class="fl">Name</label><input id="smName" value="${ed?esc(ed.name):""}" placeholder="e.g. 3 eggs">
     <div class="row" style="margin-top:8px">
       <div><label class="fl">Calories</label><input id="smCal" class="num" inputmode="decimal" value="${ed?ed.cal:""}"></div>
@@ -719,13 +720,15 @@ export function delSaved(id){
   if (S.editSaved === id) S.editSaved = null;
   Store.save(); render();
 }
-// each tap logs one serving, under whichever meal the Log tab's picker is on, so three servings
-// is three taps and each stays separately deletable
-export function logSaved(id){
+/* Fills the add-meal form rather than logging: you still choose the meal and press Add, and
+   can adjust the macros first for a bigger or smaller portion. Deliberately no render() —
+   that rebuilds the card and would wipe the fields we just set. */
+export function fillSaved(id){
   const m = DB.savedMeals[id]; if(!m) return;
-  (DB.meals[S.selDate] = DB.meals[S.selDate] || []).push(
-    { label: S.mealLabel, name: m.name, cal: m.cal, protein: m.protein, t: Date.now() });
-  Store.save(); render(); toast(`+ ${m.name}`);
+  document.getElementById("cmName").value = m.name;
+  document.getElementById("cmCal").value  = m.cal;
+  document.getElementById("cmPro").value  = m.protein;
+  toast(`Loaded ${m.name}`);
 }
 
 /* ================= PLAN ================= */
