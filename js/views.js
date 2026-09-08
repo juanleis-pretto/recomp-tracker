@@ -477,7 +477,7 @@ const CAL_MODES = {
     mark:  { done:"✓", missed:"✕" },
     label: { done:"prescribed session completed", partial:"trained, prescription not finished",
              missed:"prescribed session missed", rest:"rest day", future:"upcoming" },
-    legend:[["done","session done"],["partial","trained, not finished"],["missed","missed"],["","rest / made up elsewhere"]],
+    legend:[["done","session done"],["partial","trained, not finished"],["missed","missed"],["","rest day"]],
     stats(c, elapsed, days){
       const adh = adherence(days);
       return `<div class="s"><div class="v">${adh.need?adh.got+"/"+adh.need:"—"}</div><div class="k">prescribed sessions completed this month</div></div>
@@ -485,9 +485,9 @@ const CAL_MODES = {
     },
     note(c){
       const bits = [];
-      if (c.missed) bits.push(`${c.missed} prescribed session${c.missed>1?"s":""} missed and not made up`);
+      if (c.missed) bits.push(`${c.missed} prescribed session${c.missed>1?"s":""} missed`);
       if (c.partial) bits.push(`${c.partial} day${c.partial>1?"s":""} trained without finishing the prescription`);
-      return bits.length ? bits.join(" · ") + ". A session made up on another day of the same week greens up that day instead." : "";
+      return bits.length ? bits.join(" · ") + ". Making one up greens the day you actually did it and still counts above, but the day you skipped stays red." : "";
     },
   },
 };

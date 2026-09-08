@@ -71,7 +71,9 @@ When you log, `refreshCompletion(date)` checks the day's work against the plan a
 `completed[date]` with the session ids it finished; the calendar and `adherence()` read that
 stamp. So adding an exercise today changes what counts from here on and leaves last week's
 green days green. A session made up onto a day completes that day the same way its own session
-would — finish Tuesday's run on Wednesday and Wednesday is the day that gets stamped.
+would — finish Tuesday's run on Wednesday and Wednesday is the day that gets stamped, while
+Tuesday stays red. The calendar records what you did on each day; adherence, which credits per
+Mon–Sun week, is where a made-up session still counts.
 
 `backfillCompletion()` stamps days logged before this existed, once per doc. It skips entirely
 while there are no workouts: on a fresh device it would otherwise run before the first sync and

@@ -1,6 +1,6 @@
 import { CFG } from "./config.js";
 import { DB, Store } from "./store.js";
-import { today, dow, parseD, dstr, epley } from "./util.js";
+import { today, dow, epley } from "./util.js";
 
 /* ---------- program ----------
    CFG is the program as shipped; DB.plan holds Plan-tab edits on top of it. A shipped exercise
@@ -138,26 +138,17 @@ export function adherence(days){
   return { need, got };
 }
 
-// the Mon–Sun week containing d, as date strings — the unit adherence() credits against
-function weekOf(d){
-  const x = parseD(d), mon = new Date(x);
-  mon.setDate(x.getDate() - ((x.getDay()+6)%7));
-  return Array.from({length:7}, (_,i)=>{ const y=new Date(mon); y.setDate(mon.getDate()+i); return dstr(y); });
-}
-// was this session made up on some *other* day of d's week?
-function madeUpInWeek(d, sid){
-  return weekOf(d).some(d2 => d2!==d && completedOn(d2).includes(sid));
-}
 /* How a day reads for workouts. A session counts on whatever day it actually got done, so a
    Tuesday session made up on Wednesday makes *Wednesday* the completed day — same credit rule
    adherence() uses.
      done    — the day was stamped complete when its work was logged (its own session, or one
                made up onto it — finishing Tuesday's session on Wednesday completes Wednesday)
      partial — training was logged, but no prescribed session was finished
-     missed  — a session was prescribed, nothing was logged, and it wasn't made up that week
-     rest    — the split prescribes rest, or the missed session was made up on another day
-   Today is never "missed" — the day isn't over. A miss also un-reds itself the moment that
-   session gets made up later in the same week. */
+     missed  — a session was prescribed and the day came and went without it
+     rest    — the split prescribes rest, so there was nothing to miss
+   Today is never "missed" — the day isn't over. Making a session up later greens up the day it
+   actually happened on and still counts toward adherence, but the skipped day stays red: it is
+   a record of what you did that day. */
 export function workoutDayState(d){
   if (d > today()) return "future";
   const sid = programSplit()[dow(d)], own = sessions(d)[sid];
@@ -165,7 +156,7 @@ export function workoutDayState(d){
   if (completedOn(d).length) return "done";
   if (blocks(d).some(blockHasContent)) return "partial";
   if (!prescribed || d === today()) return "rest";
-  return madeUpInWeek(d, sid) ? "rest" : "missed";
+  return "missed";
 }
 
 /* ---------- exercise catalog & progression ---------- */
