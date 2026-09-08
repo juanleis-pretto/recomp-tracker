@@ -10,6 +10,14 @@ export const esc = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;"
 export const epley = (w,r) => w * (1 + r/30);
 // tolerant numeric parse: "132.5", "132,5", " 132.5 " → 132.5; junk → 0
 export const num = v => { const n = parseFloat(String(v).replace(",",".").trim()); return isFinite(n) ? n : 0; };
+// like num, but blank and junk come back as null instead of 0 — so a typed 0 reads as the real
+// value it is (creatine, black coffee, seasoning) rather than as a field you forgot to fill
+export const numOrNull = v => {
+  const t = String(v).replace(",",".").trim();
+  if (!t) return null;
+  const n = parseFloat(t);
+  return isFinite(n) && n >= 0 ? n : null;
+};
 export const lastNDays = n => { const out=[],d=new Date(); for(let i=n-1;i>=0;i--){const x=new Date(d); x.setDate(d.getDate()-i); out.push(dstr(x));} return out; };
 export function toast(msg){
   const t=document.getElementById("toast"); if(!t) return;

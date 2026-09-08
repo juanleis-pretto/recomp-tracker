@@ -1,6 +1,6 @@
 import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
-import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num } from "./util.js";
+import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num, numOrNull } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
          allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets, sessions, programSplit, planEdited, refreshCompletion, backfillCompletion } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
@@ -162,9 +162,9 @@ export function addCustom(lazy){
   const meal = { label:S.mealLabel, name:n, t:Date.now() };
   if(lazy){ meal.lazy=true; meal.cal=0; meal.protein=0; }
   else {
-    const c=num(document.getElementById("cmCal").value), p=num(document.getElementById("cmPro").value);
-    if(!c){ toast("Enter calories, or use record-only below"); return; }
-    meal.cal=c; meal.protein=p;
+    const c=numOrNull(document.getElementById("cmCal").value);
+    if(c===null){ toast("Enter calories — 0 is fine — or use record-only below"); return; }
+    meal.cal=c; meal.protein=num(document.getElementById("cmPro").value);
   }
   (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push(meal);
   Store.save(); render();
@@ -183,7 +183,7 @@ export function saveMealEdit(i){
   const cRaw=document.getElementById("emCal").value.trim();
   if(cRaw===""){ m.lazy=true; m.cal=0; m.protein=0; }
   else {
-    const c=num(cRaw); if(!c){ toast("Enter calories, or clear to keep record-only"); return; }
+    const c=numOrNull(cRaw); if(c===null){ toast("Calories must be a number — clear it to keep record-only"); return; }
     delete m.lazy; m.cal=c; m.protein=num(document.getElementById("emPro").value);
   }
   S.editMeal=null; Store.save(); render(); toast("Updated");
@@ -703,8 +703,9 @@ export function viewMeals(){
 export function saveSaved(){
   const n = (document.getElementById("smName").value||"").trim();
   if(!n){ toast("Name required"); return; }
-  const cal = num(document.getElementById("smCal").value), protein = num(document.getElementById("smPro").value);
-  if(!cal){ toast("Enter calories"); return; }
+  const cal = numOrNull(document.getElementById("smCal").value);
+  if(cal===null){ toast("Enter calories — 0 is fine"); return; }
+  const protein = num(document.getElementById("smPro").value);
   const editing = S.editSaved;
   const id = editing || "sm"+Date.now()+Math.random().toString(36).slice(2,5);
   DB.savedMeals[id] = { name:n, cal, protein, t: (DB.savedMeals[id]||{}).t || Date.now() };
