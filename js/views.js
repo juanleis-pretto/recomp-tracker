@@ -606,11 +606,14 @@ export function viewLifts(){
   html += `</div>`;
   const others=[];
   for (const n of allLoggedExercises()) if(!CFG.keyLifts.includes(n)){
-    const hh=exHistory(n); if(!hh.length) continue;
-    const lastS=hh[hh.length-1];
+    const hh=exHistory(n);
+    // in the plan but not yet logged still belongs here — it's where you pin a note before
+    // the first session. Only skip what is neither prescribed nor ever logged.
+    if(!hh.length && !exPrescription(n)) continue;
+    const lastS=hh.length ? hh[hh.length-1] : null;
     const retired = !exDef(n);
     const apin = DB.exNotes[n];
-    others.push(`<div class="li"><div>${esc(dispName(n))}${retired?' <span class="badge">retired</span>':""}<div class="sub">last ${fmtShort(lastS.date)}: ${fmtSets(n,lastS.sets)}</div>${apin?`<div class="sub" style="color:var(--warn)">📌 ${esc(apin)}</div>`:""}</div>
+    others.push(`<div class="li"><div>${esc(dispName(n))}${retired?' <span class="badge">retired</span>':""}<div class="sub">${lastS?`last ${fmtShort(lastS.date)}: ${fmtSets(n,lastS.sets)}`:"not logged yet"}</div>${apin?`<div class="sub" style="color:var(--warn)">📌 ${esc(apin)}</div>`:""}</div>
       <div style="display:flex;gap:8px;align-items:center;flex:none">${readyToProgress(n)?'<span class="badge good">▲</span>':''}<a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="setExNote('${esc(n)}');return false">📌</a><a href="#" class="muted" style="color:var(--accent);font-size:12px" onclick="renameEx('${esc(n)}');return false">rename</a></div></div>`);
   }
   if(others.length) html+=`<div class="card"><h2>Accessories</h2>${others.join("")}</div>`;
@@ -759,7 +762,7 @@ export function viewPlan(){
     body += ex.map((e,i)=>`<div class="planrow">
       <div class="phead">
         <div class="pn">${esc(dispName(e.n))}${e.bw?' <span class="badge">bodyweight</span>':""}
-          ${e.mus?`<div class="sub" style="color:var(--faint)">💪 ${esc(e.mus)}</div>`:""}</div>
+          <div class="sub" style="color:var(--faint)">💪 ${e.mus?esc(e.mus):'<span class="muted" style="font-size:12px">no muscles set</span>'} · <a href="#" style="color:var(--accent)" onclick="planMuscles('${sid}',${i});return false">edit</a></div></div>
         <div class="pa">
           <button class="btn small ghost" ${i?"":"disabled style=opacity:.3"} onclick="planMove('${sid}',${i},-1)">↑</button>
           <button class="btn small ghost" ${i<ex.length-1?"":"disabled style=opacity:.3"} onclick="planMove('${sid}',${i},1)">↓</button>
@@ -811,6 +814,16 @@ export function planField(sid, i, key, v){
   if (key === "lo" && ex[i].hi < ex[i].lo) ex[i].hi = ex[i].lo;
   if (key === "hi" && ex[i].hi < ex[i].lo) ex[i].lo = ex[i].hi;
   Store.save();
+}
+// muscles feed the workout card's targets summary, so a custom exercise added here can say
+// what it works. Prompt rather than another inline field: the rows are tall enough already.
+export function planMuscles(sid, i){
+  const ex = planExercises(sid), e = ex[i]; if(!e) return;
+  const v = prompt(`Muscles worked by "${dispName(e.n)}" — comma separated:`, e.mus || "");
+  if (v === null) return;
+  const t = v.trim();
+  if (t) e.mus = t; else delete e.mus;
+  Store.save(); render();
 }
 export function planMove(sid, i, dir){
   const ex = planExercises(sid), j = i + dir;

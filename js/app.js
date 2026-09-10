@@ -57,7 +57,7 @@ Object.assign(window, {
   pickLift:V.pickLift, renameEx:V.renameEx,
   saveTargets:V.saveTargets, resetTargets:V.resetTargets,
   setPlanDay:V.setPlanDay, setPlanSession:V.setPlanSession, planField:V.planField,
-  planMove:V.planMove, planRemove:V.planRemove, planAdd:V.planAdd, planReset:V.planReset,
+  planMuscles:V.planMuscles, planMove:V.planMove, planRemove:V.planRemove, planAdd:V.planAdd, planReset:V.planReset,
   saveSaved:V.saveSaved, editSaved:V.editSaved, cancelSaved:V.cancelSaved,
   delSaved:V.delSaved, fillSaved:V.fillSaved,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,
