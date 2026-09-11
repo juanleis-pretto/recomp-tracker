@@ -143,9 +143,10 @@ export function adherence(days){
    adherence() uses.
      done    — the day was stamped complete when its work was logged (its own session, or one
                made up onto it — finishing Tuesday's session on Wednesday completes Wednesday)
-     partial — training was logged, but no prescribed session was finished
+     partial — a session was prescribed and trained, but not finished
      missed  — a session was prescribed and the day came and went without it
-     rest    — the split prescribes rest, so there was nothing to miss
+     rest    — the split prescribes rest, so there was nothing to miss or fall short of,
+               whether or not you trained anyway
    Today is never "missed" — the day isn't over. Making a session up later greens up the day it
    actually happened on and still counts toward adherence, but the skipped day stays red: it is
    a record of what you did that day. */
@@ -154,7 +155,9 @@ export function workoutDayState(d){
   const sid = programSplit()[dow(d)], own = sessions(d)[sid];
   const prescribed = own && own.type !== "rest";
   if (completedOn(d).length) return "done";
-  if (blocks(d).some(blockHasContent)) return "partial";
+  // "partial" means you fell short of a prescription, so it needs one to exist. Training on a
+  // rest day is extra, not a shortfall — a makeup done that day still greens it via the stamp.
+  if (prescribed && blocks(d).some(blockHasContent)) return "partial";
   if (!prescribed || d === today()) return "rest";
   return "missed";
 }
