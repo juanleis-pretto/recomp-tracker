@@ -129,11 +129,14 @@ function foodCard(d){
   }).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
-  const saved = savedList();
+  const fixed = savedFixed(), byW = savedByWeight(), saved = [...byW, ...fixed];
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
-    ${saved.length?`<h3 style="margin-top:2px">Saved meals</h3>
-    <div class="muted" style="margin:-4px 0 6px">Tap one to fill the form below — nothing is logged until you press Add.</div>
-    <div class="mealgrid">${saved.map(m=>`<button class="mealbtn" onclick="fillSaved('${m.id}')">
+    ${saved.length?`<div class="muted" style="margin:2px 0 6px">Tap a food to fill the form below — nothing is logged until you press Add.</div>`:""}
+    ${byW.length?`<h3 style="margin-top:6px">By weight</h3>
+    <div class="mealgrid">${byW.map(m=>`<button class="mealbtn" onclick="fillScaled('${m.id}')">
+      <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g per ${m.per}g</div></button>`).join("")}</div>`:""}
+    ${fixed.length?`<h3 style="margin-top:${byW.length?10:6}px">Saved meals</h3>
+    <div class="mealgrid">${fixed.map(m=>`<button class="mealbtn" onclick="fillSaved('${m.id}')">
       <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g</div></button>`).join("")}</div>`:""}
     <h3${saved.length?"":' style="margin-top:2px"'}>Add meal</h3>
     <div class="row">
@@ -679,28 +682,36 @@ export function viewTrends(){
 const savedList = () => Object.entries(DB.savedMeals)
   .map(([id,m])=>({id,...m}))
   .sort((a,b)=> a.name.localeCompare(b.name));
+// `per` set = the macros are for that many grams, so a logged amount gets scaled from it.
+// No `per` = a fixed serving, logged as-is.
+const savedFixed    = () => savedList().filter(m=>!m.per);
+const savedByWeight = () => savedList().filter(m=>m.per);
+const r1 = n => Math.round(n*10)/10;
 
 export function viewMeals(){
-  const list = savedList();
+  const fixed = savedFixed(), byW = savedByWeight();
   const ed = S.editSaved ? DB.savedMeals[S.editSaved] : null;
-  return `<div class="card"><h2>${ed?"Edit saved meal":"Add a saved meal"}</h2>
-    <div class="muted" style="margin-bottom:8px">A meal-prep serving or a standard plate, saved once. Tap it on the Log tab to fill in the name and macros, then pick which meal it counts as and press Add.</div>
-    <label class="fl">Name</label><input id="smName" value="${ed?esc(ed.name):""}" placeholder="e.g. 3 eggs">
+  const row = m => `<div class="li">
+      <div style="cursor:pointer" onclick="editSaved('${m.id}')">${esc(m.name)}
+        <div class="sub">${m.cal} cal · ${m.protein}g protein${m.per?` per ${m.per}g`:""} · <span style="color:var(--accent)">edit</span></div></div>
+      <button class="del" onclick="delSaved('${m.id}')">✕</button></div>`;
+  return `<div class="card"><h2>${ed?"Edit food":"Add a food"}</h2>
+    <div class="muted" style="margin-bottom:8px">Saved once, then filled in on the Log tab with one tap. Leave <b>per</b> blank for a fixed serving (3 eggs, a prep bowl). Set it for anything you weigh — enter the macros for that reference weight and the Log tab scales them to whatever you actually put on the scale.</div>
+    <label class="fl">Name</label><input id="smName" value="${ed?esc(ed.name):""}" placeholder="e.g. 3 eggs, or Potato">
     <div class="row" style="margin-top:8px">
       <div><label class="fl">Calories</label><input id="smCal" class="num" inputmode="decimal" value="${ed?ed.cal:""}"></div>
       <div><label class="fl">Protein (g)</label><input id="smPro" class="num" inputmode="decimal" value="${ed?ed.protein:""}"></div>
+      <div><label class="fl">Per (g)</label><input id="smPer" class="num" inputmode="decimal" value="${ed&&ed.per?ed.per:""}" placeholder="—"></div>
     </div>
     <div class="row" style="margin-top:10px">
-      <button class="btn primary" onclick="saveSaved()">${ed?"Update":"Save meal"}</button>
+      <button class="btn primary" onclick="saveSaved()">${ed?"Update":"Save food"}</button>
       ${ed?`<button class="btn ghost fx" onclick="cancelSaved()">Cancel</button>`:""}
     </div>
   </div>
-  <div class="card"><h2>Your saved meals${list.length?` (${list.length})`:""}</h2>
-    ${list.length?list.map(m=>`<div class="li">
-      <div style="cursor:pointer" onclick="editSaved('${m.id}')">${esc(m.name)}
-        <div class="sub">${m.cal} cal · ${m.protein}g protein · <span style="color:var(--accent)">edit</span></div></div>
-      <button class="del" onclick="delSaved('${m.id}')">✕</button></div>`).join("")
-    :`<div class="center">Nothing saved yet. Add one above and it shows up on the Log tab.</div>`}
+  <div class="card"><h2>Your foods${fixed.length+byW.length?` (${fixed.length+byW.length})`:""}</h2>
+    ${byW.length?`<h3 style="margin-top:2px">By weight</h3>${byW.map(row).join("")}`:""}
+    ${fixed.length?`<h3${byW.length?"":' style="margin-top:2px"'}>Fixed servings</h3>${fixed.map(row).join("")}`:""}
+    ${fixed.length+byW.length?"":`<div class="center">Nothing saved yet. Add one above and it shows up on the Log tab.</div>`}
   </div>`;
 }
 export function saveSaved(){
@@ -711,9 +722,26 @@ export function saveSaved(){
   const protein = num(document.getElementById("smPro").value);
   const editing = S.editSaved;
   const id = editing || "sm"+Date.now()+Math.random().toString(36).slice(2,5);
+  const per = numOrNull(document.getElementById("smPer").value);
+  if (per !== null && per <= 0){ toast("Per (g) must be above 0, or blank"); return; }
   DB.savedMeals[id] = { name:n, cal, protein, t: (DB.savedMeals[id]||{}).t || Date.now() };
+  if (per !== null) DB.savedMeals[id].per = per;
   S.editSaved = null;
   Store.save(); render(); toast(editing?"Updated":"Saved");
+}
+/* Ask for the weight, scale from the reference, and fill the form. The weight goes into the
+   name so the logged entry says what was actually eaten, and the macros stay plain numbers
+   rather than a live reference — editing the food later can't rewrite what you logged. */
+export function fillScaled(id){
+  const m = DB.savedMeals[id]; if(!m || !m.per) return;
+  const g = numOrNull(prompt(`How many grams of ${m.name}?\n\n${m.cal} cal · ${m.protein}g protein per ${m.per}g`, ""));
+  if (g === null){ return; }        // cancelled, or not a number
+  if (g <= 0){ toast("Enter a weight above 0"); return; }
+  const k = g / m.per;
+  document.getElementById("cmName").value = `${m.name} (${r1(g)}g)`;
+  document.getElementById("cmCal").value  = r1(m.cal * k);
+  document.getElementById("cmPro").value  = r1(m.protein * k);
+  toast(`${r1(g)}g → ${r1(m.cal*k)} cal · ${r1(m.protein*k)}g`);
 }
 export function editSaved(id){ S.editSaved = id; render(); window.scrollTo(0,0); }
 export function cancelSaved(){ S.editSaved = null; render(); }
