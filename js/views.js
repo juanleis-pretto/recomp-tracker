@@ -6,7 +6,7 @@ import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, bloc
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
-export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food", planDay: new Date().getDay(), editSaved: null };
+export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food", planDay: new Date().getDay(), editSaved: null, scaleId: null };
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
@@ -130,11 +130,19 @@ function foodCard(d){
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
   const fixed = savedFixed(), byW = savedByWeight(), saved = [...byW, ...fixed];
+  const sc = S.scaleId ? DB.savedMeals[S.scaleId] : null;
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
     ${saved.length?`<div class="muted" style="margin:2px 0 6px">Tap a food to fill the form below — nothing is logged until you press Add.</div>`:""}
     ${byW.length?`<h3 style="margin-top:6px">By weight</h3>
     <div class="mealgrid">${byW.map(m=>`<button class="mealbtn" onclick="fillScaled('${m.id}')">
       <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g per ${m.per}g</div></button>`).join("")}</div>`:""}
+    ${sc?`<div id="scaleBox" class="mealgroup" style="margin-top:8px">
+      <label class="fl" style="margin-top:8px">Grams of ${esc(sc.name)}</label>
+      <div class="row">
+        <input id="scaleG" class="num" inputmode="decimal" placeholder="grams" oninput="scaleType()">
+        <button class="btn ghost fx" onclick="cancelScale()">✕</button></div>
+      <div class="muted" id="scaleOut" style="padding:6px 0 8px">Enter grams — ${sc.cal} cal · ${sc.protein}g per ${sc.per}g</div>
+    </div>`:""}
     ${fixed.length?`<h3 style="margin-top:${byW.length?10:6}px">Saved meals</h3>
     <div class="mealgrid">${fixed.map(m=>`<button class="mealbtn" onclick="fillSaved('${m.id}')">
       <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g</div></button>`).join("")}</div>`:""}
@@ -170,6 +178,7 @@ export function addCustom(lazy){
     meal.cal=c; meal.protein=num(document.getElementById("cmPro").value);
   }
   (DB.meals[S.selDate]=DB.meals[S.selDate]||[]).push(meal);
+  S.scaleId = null;
   Store.save(); render();
 }
 export function delMeal(i){ DB.meals[S.selDate].splice(i,1); if(S.editMeal===i) S.editMeal=null; Store.save(); render(); }
@@ -729,20 +738,43 @@ export function saveSaved(){
   S.editSaved = null;
   Store.save(); render(); toast(editing?"Updated":"Saved");
 }
-/* Ask for the weight, scale from the reference, and fill the form. The weight goes into the
-   name so the logged entry says what was actually eaten, and the macros stay plain numbers
-   rather than a live reference — editing the food later can't rewrite what you logged. */
+/* Weight entry is an inline field rather than prompt(): a system dialog always gets the full
+   text keyboard, and only a real input can ask for the number pad via inputmode. Typing scales
+   the add-meal form live — the weight goes into the name so the entry says what was eaten, and
+   the macros are written as plain numbers, so editing the food later can't rewrite a logged day. */
+const setForm = (name, cal, pro) => {
+  document.getElementById("cmName").value = name;
+  document.getElementById("cmCal").value  = cal;
+  document.getElementById("cmPro").value  = pro;
+};
+// closes the weight field without a re-render, which would wipe the values just written
+function closeScale(){
+  S.scaleId = null;
+  const b = document.getElementById("scaleBox");
+  if (b) b.style.display = "none";
+}
 export function fillScaled(id){
   const m = DB.savedMeals[id]; if(!m || !m.per) return;
-  const g = numOrNull(prompt(`How many grams of ${m.name}?\n\n${m.cal} cal · ${m.protein}g protein per ${m.per}g`, ""));
-  if (g === null){ return; }        // cancelled, or not a number
-  if (g <= 0){ toast("Enter a weight above 0"); return; }
-  const k = g / m.per;
-  document.getElementById("cmName").value = `${m.name} (${r1(g)}g)`;
-  document.getElementById("cmCal").value  = r1(m.cal * k);
-  document.getElementById("cmPro").value  = r1(m.protein * k);
-  toast(`${r1(g)}g → ${r1(m.cal*k)} cal · ${r1(m.protein*k)}g`);
+  S.scaleId = id;
+  render();                                  // before touching fields: render replaces them
+  const el = document.getElementById("scaleG");
+  if (el){ el.value = ""; el.focus(); }      // still inside the tap, so iOS opens the keypad
+  setForm(m.name, "", "");
 }
+export function scaleType(){
+  const m = S.scaleId && DB.savedMeals[S.scaleId]; if(!m) return;
+  const g = numOrNull(document.getElementById("scaleG").value);
+  const out = document.getElementById("scaleOut");
+  if (g === null || g <= 0){
+    setForm(m.name, "", "");
+    out.textContent = `Enter grams — ${m.cal} cal · ${m.protein}g per ${m.per}g`;
+    return;
+  }
+  const k = g / m.per, cal = r1(m.cal*k), pro = r1(m.protein*k);
+  setForm(`${m.name} (${r1(g)}g)`, cal, pro);
+  out.textContent = `${r1(g)}g → ${cal} cal · ${pro}g protein`;
+}
+export function cancelScale(){ S.scaleId = null; render(); }
 export function editSaved(id){ S.editSaved = id; render(); window.scrollTo(0,0); }
 export function cancelSaved(){ S.editSaved = null; render(); }
 export function delSaved(id){
@@ -757,9 +789,8 @@ export function delSaved(id){
    that rebuilds the card and would wipe the fields we just set. */
 export function fillSaved(id){
   const m = DB.savedMeals[id]; if(!m) return;
-  document.getElementById("cmName").value = m.name;
-  document.getElementById("cmCal").value  = m.cal;
-  document.getElementById("cmPro").value  = m.protein;
+  closeScale();
+  setForm(m.name, m.cal, m.protein);
   toast(`Loaded ${m.name}`);
 }
 

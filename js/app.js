@@ -60,6 +60,7 @@ Object.assign(window, {
   planMuscles:V.planMuscles, planMove:V.planMove, planRemove:V.planRemove, planAdd:V.planAdd, planReset:V.planReset,
   saveSaved:V.saveSaved, editSaved:V.editSaved, cancelSaved:V.cancelSaved,
   delSaved:V.delSaved, fillSaved:V.fillSaved, fillScaled:V.fillScaled,
+  scaleType:V.scaleType, cancelScale:V.cancelScale,
   genClaude:V.genClaude, copyClaude:V.copyClaude, dlJSON:V.dlJSON, impJSON:V.impJSON,
   resetAll:V.resetAll, logout:V.logout,
 });
