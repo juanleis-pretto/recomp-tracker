@@ -962,6 +962,15 @@ export function saveTargets(){
 export function resetTargets(){ delete DB.prefs.targets; Store.save(); render(); toast("Back to program defaults"); }
 
 export function genClaude(){
+  // Surface a failure instead of leaving an empty textarea and a button that looks dead.
+  try { document.getElementById("claudeOut").value = buildClaude(); }
+  catch(e){
+    document.getElementById("claudeOut").value =
+      `The summary failed to build.\n\n${e && e.message || e}\n\nSend this message along and it can be fixed.`;
+    toast("Summary failed — details in the box");
+  }
+}
+function buildClaude(){
   const T=targets(), days=lastNDays(30).filter(d=>d<=today());
   let s=`# Fitness Progress Export — ${today()}\n\n`;
   s+=`Plan: 6-month recomp. Targets: ${T.cal} cal/day, ${T.protein}g protein (floor ${T.proteinFloor}g). Friday = planned cheat dinner.\n`;
@@ -992,8 +1001,10 @@ export function genClaude(){
   s+="\n## Key lifts — full history (weight×reps per set, best e1RM)\n";
   for(const n of CFG.keyLifts){
     const h=exHistory(n); if(!h.length){ s+=`### ${dispName(n)}\nno sessions\n`; continue; }
+    // a key lift can have history and no prescription — taken out of the plan on the Plan tab
     const rx=exPrescription(n), rdy=readyToProgress(n);
-    s+=`### ${dispName(n)} (prescribed ${rx.sets}×${rx.lo}–${rx.hi})${rdy?" — READY TO PROGRESS":""}\n`;
+    const rxTxt = rx ? ` (prescribed ${rx.sets}×${rx.lo}–${rx.hi})` : " [no longer in the program]";
+    s+=`### ${dispName(n)}${rxTxt}${rdy?" — READY TO PROGRESS":""}\n`;
     for(const sess of h){
       const notes=sess.sets.filter(x=>x.note).map(x=>x.note).join("; ");
       s+=`${sess.date}: ${fmtSets(n,sess.sets)} | e1RM ${bestE1RM(sess.sets)}${notes?` | notes: ${notes}`:""}\n`;
@@ -1018,7 +1029,7 @@ export function genClaude(){
   const adhExport = adherence(days.filter(d=>d<=today()));
   s+=`\n## Adherence (30d)\nWorkouts: ${adhExport.got}/${adhExport.need} prescribed sessions completed\n`;
   s+=`\nQuestions for you, Claude: Am I on track for the recomp goals? Which lifts are stalling? Any adjustments to calories, protein, or the program?\n`;
-  document.getElementById("claudeOut").value=s;
+  return s;
 }
 export function copyClaude(){
   const el=document.getElementById("claudeOut");
