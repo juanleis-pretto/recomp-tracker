@@ -129,23 +129,24 @@ function foodCard(d){
   }).join("");
   const calPct = Math.min(100, t.cal/T.cal*100);
   const pPct = Math.min(100, t.protein/T.protein*100);
-  const fixed = savedFixed(), byW = savedByWeight(), saved = [...byW, ...fixed];
+  const fixed = savedFixed(), byW = savedByWeight(), byC = savedByCount();
+  const saved = [...byW, ...byC, ...fixed];
   const sc = S.scaleId ? DB.savedMeals[S.scaleId] : null;
+  const grp = (label, list) => list.length ? `<optgroup label="${label}">${list.map(m=>
+    `<option value="${m.id}"${m.id===S.scaleId?" selected":""}>${esc(m.name)} — ${m.cal} cal · ${m.protein}g${m.per?" "+basisTxt(m):""}</option>`).join("")}</optgroup>` : "";
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
-    ${saved.length?`<div class="muted" style="margin:2px 0 6px">Tap a food to fill the form below — nothing is logged until you press Add.</div>`:""}
-    ${byW.length?`<h3 style="margin-top:6px">By weight</h3>
-    <div class="mealgrid">${byW.map(m=>`<button class="mealbtn" onclick="fillScaled('${m.id}')">
-      <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g per ${m.per}g</div></button>`).join("")}</div>`:""}
+    ${saved.length?`<label class="fl" style="margin-top:0">Saved food — fills the form below, nothing is logged until you press Add</label>
+    <select id="foodSel" onchange="pickFood(this.value)">
+      <option value="">Choose a saved food…</option>
+      ${grp("By weight", byW)}${grp("By count", byC)}${grp("Fixed servings", fixed)}
+    </select>`:""}
     ${sc?`<div id="scaleBox" class="mealgroup" style="margin-top:8px">
-      <label class="fl" style="margin-top:8px">Grams of ${esc(sc.name)}</label>
+      <label class="fl" style="margin-top:8px">${esc(sc.name)} — ${amountWord(sc)}</label>
       <div class="row">
-        <input id="scaleG" class="num" inputmode="decimal" placeholder="grams" oninput="scaleType()">
+        <input id="scaleG" class="num" inputmode="decimal" placeholder="${isEa(sc)?"count":"grams"}" oninput="scaleType()">
         <button class="btn ghost fx" onclick="cancelScale()">✕</button></div>
-      <div class="muted" id="scaleOut" style="padding:6px 0 8px">Enter grams — ${sc.cal} cal · ${sc.protein}g per ${sc.per}g</div>
+      <div class="muted" id="scaleOut" style="padding:6px 0 8px">Enter ${amountWord(sc)} — ${sc.cal} cal · ${sc.protein}g ${basisTxt(sc)}</div>
     </div>`:""}
-    ${fixed.length?`<h3 style="margin-top:${byW.length?10:6}px">Saved meals</h3>
-    <div class="mealgrid">${fixed.map(m=>`<button class="mealbtn" onclick="fillSaved('${m.id}')">
-      <div class="mn">${esc(m.name)}</div><div class="mm">${m.cal} cal · ${m.protein}g</div></button>`).join("")}</div>`:""}
     <h3${saved.length?"":' style="margin-top:2px"'}>Add meal</h3>
     <div class="row">
       <select id="lblSel" style="flex:0 0 42%" onchange="pickLabel(this.value)">${lblOpts(S.mealLabel)}</select>
@@ -691,36 +692,54 @@ export function viewTrends(){
 const savedList = () => Object.entries(DB.savedMeals)
   .map(([id,m])=>({id,...m}))
   .sort((a,b)=> a.name.localeCompare(b.name));
-// `per` set = the macros are for that many grams, so a logged amount gets scaled from it.
-// No `per` = a fixed serving, logged as-is.
+/* A saved food is one of three things:
+     no `per`               a fixed serving, logged as-is
+     `per` + unit "g"       macros for that many grams
+     `per` + unit "ea"      macros for that many items — eggs get counted, not weighed
+   Scaling is the same arithmetic either way; only the wording and the logged suffix differ. */
+const isEa = m => m.unit === "ea";
 const savedFixed    = () => savedList().filter(m=>!m.per);
-const savedByWeight = () => savedList().filter(m=>m.per);
+const savedByWeight = () => savedList().filter(m=>m.per && !isEa(m));
+const savedByCount  = () => savedList().filter(m=>m.per && isEa(m));
 const r1 = n => Math.round(n*10)/10;
+// "per 148g" / "each" / "per 2"
+const basisTxt  = m => !m.per ? "" : (isEa(m) ? (m.per===1 ? "each" : `per ${m.per}`) : `per ${m.per}g`);
+// what a logged entry's name gets: "Potato (200g)" / "Egg ×3"
+const amountTxt = (m,n) => isEa(m) ? `×${r1(n)}` : `(${r1(n)}g)`;
+const amountWord = m => isEa(m) ? "how many" : "grams";
 
 export function viewMeals(){
-  const fixed = savedFixed(), byW = savedByWeight();
+  const fixed = savedFixed(), byW = savedByWeight(), byC = savedByCount();
+  const nFoods = fixed.length + byW.length + byC.length;
   const ed = S.editSaved ? DB.savedMeals[S.editSaved] : null;
   const row = m => `<div class="li">
       <div style="cursor:pointer" onclick="editSaved('${m.id}')">${esc(m.name)}
-        <div class="sub">${m.cal} cal · ${m.protein}g protein${m.per?` per ${m.per}g`:""} · <span style="color:var(--accent)">edit</span></div></div>
+        <div class="sub">${m.cal} cal · ${m.protein}g protein${m.per?` ${basisTxt(m)}`:""} · <span style="color:var(--accent)">edit</span></div></div>
       <button class="del" onclick="delSaved('${m.id}')">✕</button></div>`;
   return `<div class="card"><h2>${ed?"Edit food":"Add a food"}</h2>
-    <div class="muted" style="margin-bottom:8px">Saved once, then filled in on the Log tab with one tap. Leave <b>per</b> blank for a fixed serving (3 eggs, a prep bowl). Set it for anything you weigh — enter the macros for that reference weight and the Log tab scales them to whatever you actually put on the scale.</div>
+    <div class="muted" style="margin-bottom:8px">Saved once, then filled in on the Log tab with one tap. Leave <b>per</b> blank for a fixed serving logged as-is (a prep bowl). Set it to scale: in <b>grams</b> for anything you weigh, or in <b>items</b> for anything you count — one egg at 70 cal · 6g, per 1, and logging three gives 210 · 18.</div>
     <label class="fl">Name</label><input id="smName" value="${ed?esc(ed.name):""}" placeholder="e.g. 3 eggs, or Potato">
     <div class="row" style="margin-top:8px">
       <div><label class="fl">Calories</label><input id="smCal" class="num" inputmode="decimal" value="${ed?ed.cal:""}"></div>
       <div><label class="fl">Protein (g)</label><input id="smPro" class="num" inputmode="decimal" value="${ed?ed.protein:""}"></div>
-      <div><label class="fl">Per (g)</label><input id="smPer" class="num" inputmode="decimal" value="${ed&&ed.per?ed.per:""}" placeholder="—"></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div><label class="fl">Per — blank for a fixed serving</label><input id="smPer" class="num" inputmode="decimal" value="${ed&&ed.per?ed.per:""}" placeholder="—"></div>
+      <div><label class="fl">Measured in</label><select id="smUnit">
+        <option value="g"${ed&&isEa(ed)?"":" selected"}>grams</option>
+        <option value="ea"${ed&&isEa(ed)?" selected":""}>items (count)</option>
+      </select></div>
     </div>
     <div class="row" style="margin-top:10px">
       <button class="btn primary" onclick="saveSaved()">${ed?"Update":"Save food"}</button>
       ${ed?`<button class="btn ghost fx" onclick="cancelSaved()">Cancel</button>`:""}
     </div>
   </div>
-  <div class="card"><h2>Your foods${fixed.length+byW.length?` (${fixed.length+byW.length})`:""}</h2>
+  <div class="card"><h2>Your foods${nFoods?` (${nFoods})`:""}</h2>
     ${byW.length?`<h3 style="margin-top:2px">By weight</h3>${byW.map(row).join("")}`:""}
-    ${fixed.length?`<h3${byW.length?"":' style="margin-top:2px"'}>Fixed servings</h3>${fixed.map(row).join("")}`:""}
-    ${fixed.length+byW.length?"":`<div class="center">Nothing saved yet. Add one above and it shows up on the Log tab.</div>`}
+    ${byC.length?`<h3${byW.length?"":' style="margin-top:2px"'}>By count</h3>${byC.map(row).join("")}`:""}
+    ${fixed.length?`<h3${byW.length||byC.length?"":' style="margin-top:2px"'}>Fixed servings</h3>${fixed.map(row).join("")}`:""}
+    ${nFoods?"":`<div class="center">Nothing saved yet. Add one above and it shows up on the Log tab.</div>`}
   </div>`;
 }
 export function saveSaved(){
@@ -732,9 +751,13 @@ export function saveSaved(){
   const editing = S.editSaved;
   const id = editing || "sm"+Date.now()+Math.random().toString(36).slice(2,5);
   const per = numOrNull(document.getElementById("smPer").value);
-  if (per !== null && per <= 0){ toast("Per (g) must be above 0, or blank"); return; }
+  if (per !== null && per <= 0){ toast("Per must be above 0, or blank"); return; }
   DB.savedMeals[id] = { name:n, cal, protein, t: (DB.savedMeals[id]||{}).t || Date.now() };
-  if (per !== null) DB.savedMeals[id].per = per;
+  if (per !== null){
+    DB.savedMeals[id].per = per;
+    // only stored for counts, so foods saved before this stay plain grams
+    if (document.getElementById("smUnit").value === "ea") DB.savedMeals[id].unit = "ea";
+  }
   S.editSaved = null;
   Store.save(); render(); toast(editing?"Updated":"Saved");
 }
@@ -761,25 +784,33 @@ export function fillScaled(id){
   if (el){ el.value = ""; el.focus(); }      // still inside the tap, so iOS opens the keypad
   setForm(m.name, "", "");
 }
+// scalable foods open the amount field; fixed servings fill straight away and free the picker
+export function pickFood(id){
+  if (!id){ if (S.scaleId) cancelScale(); return; }
+  const m = DB.savedMeals[id]; if(!m) return;
+  if (m.per) { fillScaled(id); return; }
+  fillSaved(id);
+  const sel = document.getElementById("foodSel"); if (sel) sel.value = "";
+}
 export function scaleType(){
   const m = S.scaleId && DB.savedMeals[S.scaleId]; if(!m) return;
-  const g = numOrNull(document.getElementById("scaleG").value);
+  const n = numOrNull(document.getElementById("scaleG").value);
   const out = document.getElementById("scaleOut");
-  if (g === null || g <= 0){
+  if (n === null || n <= 0){
     setForm(m.name, "", "");
-    out.textContent = `Enter grams — ${m.cal} cal · ${m.protein}g per ${m.per}g`;
+    out.textContent = `Enter ${amountWord(m)} — ${m.cal} cal · ${m.protein}g ${basisTxt(m)}`;
     return;
   }
-  const k = g / m.per, cal = r1(m.cal*k), pro = r1(m.protein*k);
-  setForm(`${m.name} (${r1(g)}g)`, cal, pro);
-  out.textContent = `${r1(g)}g → ${cal} cal · ${pro}g protein`;
+  const k = n / m.per, cal = r1(m.cal*k), pro = r1(m.protein*k);
+  setForm(`${m.name} ${amountTxt(m,n)}`, cal, pro);
+  out.textContent = `${r1(n)}${isEa(m)?"":"g"} → ${cal} cal · ${pro}g protein`;
 }
 export function cancelScale(){ S.scaleId = null; render(); }
 export function editSaved(id){ S.editSaved = id; render(); window.scrollTo(0,0); }
 export function cancelSaved(){ S.editSaved = null; render(); }
 export function delSaved(id){
   const m = DB.savedMeals[id]; if(!m) return;
-  if(!confirm(`Delete the saved meal "${m.name}"?\n\nMeals you've already logged from it are kept.`)) return;
+  if(!confirm(`Delete the saved food "${m.name}"?\n\nMeals you've already logged from it are kept.`)) return;
   delete DB.savedMeals[id];
   if (S.editSaved === id) S.editSaved = null;
   Store.save(); render();
