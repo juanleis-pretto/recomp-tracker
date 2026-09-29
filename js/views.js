@@ -6,9 +6,18 @@ import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, bloc
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
-export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food", planDay: new Date().getDay(), editSaved: null, scaleId: null, foodQ: "" };
+export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food", planDay: new Date().getDay(), editSaved: null, scaleId: null, foodQ: "", foodOpen: false };
 let render = ()=>{}, go = ()=>{};
-export function init(r, g){ render = r; go = g; }
+export function init(r, g){
+  render = r; go = g;
+  // closes the food list on a tap elsewhere. Not on blur: blur lands before the row's click,
+  // so the list would vanish out from under the tap that was selecting something.
+  document.addEventListener("click", e => {
+    if (!S.foodOpen) return;
+    if (e.target.closest && e.target.closest(".combo")) return;
+    closeFoods();
+  });
+}
 
 const DOW_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 // unique muscles across a list of exercises, in first-seen order
@@ -134,9 +143,12 @@ function foodCard(d){
   const sc = S.scaleId ? DB.savedMeals[S.scaleId] : null;
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
     ${saved.length?`<label class="fl" style="margin-top:0">Saved food — fills the form below, nothing is logged until you press Add</label>
-    ${saved.length>6?`<input id="foodFind" value="${esc(S.foodQ)}" placeholder="Search foods…" oninput="filterFoods(this.value)"
-      autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" style="margin-bottom:6px">`:""}
-    <select id="foodSel" onchange="pickFood(this.value)">${foodOptions(S.foodQ)}</select>`:""}
+    <div class="combo">
+      <input id="foodPick" value="${esc(S.foodQ)}" placeholder="Search or tap to browse…"
+        onfocus="openFoods()" oninput="filterFoods(this.value)"
+        autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search">
+      <div id="foodList" class="combolist"${S.foodOpen?"":" hidden"}>${foodRows(S.foodQ)}</div>
+    </div>`:""}
     ${sc?`<div id="scaleBox" class="mealgroup" style="margin-top:8px">
       <label class="fl" style="margin-top:8px">${esc(sc.name)} — ${amountWord(sc)}</label>
       <div class="row">
@@ -781,39 +793,44 @@ export function fillScaled(id){
   if (el){ el.value = ""; el.focus(); }      // still inside the tap, so iOS opens the keypad
   setForm(m.name, "", "");
 }
-/* The picker's options, filtered by a plain substring on the name. Kept separate from the card
-   so typing can swap just the <select>'s contents: re-rendering the card would rebuild the
-   search box too and drop focus after the first keystroke. */
-function foodOptions(q){
+/* A combobox, not a <select>: iOS opens a native picker wheel for a select and there is no way
+   to type into it, which is why filtering used to need a second field. This is one text input
+   with its own list underneath, so tapping it and typing narrows the same control.
+
+   The list's markup is built apart from the card because typing swaps only the list's contents —
+   re-rendering the card would rebuild the input too and drop focus after one keystroke. */
+function foodRows(q){
   const needle = (q||"").trim().toLowerCase();
   const hit = m => !needle || m.name.toLowerCase().includes(needle);
   const grp = (label, list) => {
     const f = list.filter(hit);
-    return f.length ? `<optgroup label="${label}">${f.map(m=>
-      `<option value="${m.id}"${m.id===S.scaleId?" selected":""}>${esc(m.name)} — ${m.cal} cal · ${m.protein}g${m.per?" "+basisTxt(m):""}</option>`).join("")}</optgroup>` : "";
+    return f.length ? `<div class="cgrp">${label}</div>` + f.map(m=>
+      `<button type="button" class="crow" onclick="pickFood('${m.id}')">
+        <span class="cn">${esc(m.name)}</span>
+        <span class="cm">${m.cal} cal · ${m.protein}g${m.per?" "+basisTxt(m):""}</span></button>`).join("") : "";
   };
   const body = grp("By weight", savedByWeight()) + grp("By count", savedByCount()) + grp("Fixed servings", savedFixed());
-  const n = (body.match(/<option /g)||[]).length;
-  const head = !body ? "No food matches that"
-             : needle ? `${n} match${n===1?"":"es"} — choose one…`
-             : "Choose a saved food…";
-  return `<option value="">${head}</option>${body}`;
+  return body || `<div class="cempty">No food matches “${esc(q)}”</div>`;
 }
-export function filterFoods(q){
-  S.foodQ = q;
-  const sel = document.getElementById("foodSel");
-  if (sel) sel.innerHTML = foodOptions(q);
+function showFoods(q){
+  S.foodOpen = true;
+  const l = document.getElementById("foodList");
+  if (l){ l.innerHTML = foodRows(q); l.hidden = false; }
+}
+export function openFoods(){ showFoods(S.foodQ); }
+export function filterFoods(q){ S.foodQ = q; showFoods(q); }
+function closeFoods(){
+  S.foodOpen = false;
+  const l = document.getElementById("foodList"); if (l) l.hidden = true;
 }
 // scalable foods open the amount field; fixed servings fill straight away and free the picker
 export function pickFood(id){
-  if (!id){ if (S.scaleId) cancelScale(); return; }
   const m = DB.savedMeals[id]; if(!m) return;
-  S.foodQ = "";                              // a pick ends the search, so the next one starts clean
-  if (m.per) { fillScaled(id); return; }     // renders, which redraws the cleared search box
+  S.foodQ = ""; S.foodOpen = false;          // a pick ends the search, so the next one starts clean
+  if (m.per) { fillScaled(id); return; }     // renders, which redraws the input empty and closed
   fillSaved(id);
-  const f = document.getElementById("foodFind"); if (f) f.value = "";
-  const sel = document.getElementById("foodSel");
-  if (sel){ sel.innerHTML = foodOptions(""); sel.value = ""; }
+  const inp = document.getElementById("foodPick"); if (inp) inp.value = "";
+  closeFoods();
 }
 export function scaleType(){
   const m = S.scaleId && DB.savedMeals[S.scaleId]; if(!m) return;
