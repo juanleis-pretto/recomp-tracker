@@ -6,7 +6,7 @@ import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, bloc
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
-export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food", planDay: new Date().getDay(), editSaved: null, scaleId: null };
+export const S = { selDate: today(), mealLabel: "Breakfast", addExSel: "", liftSel: CFG.keyLifts[0], editMeal: null, calMonth: today().slice(0,7), calMode: "food", planDay: new Date().getDay(), editSaved: null, scaleId: null, foodQ: "" };
 let render = ()=>{}, go = ()=>{};
 export function init(r, g){ render = r; go = g; }
 
@@ -132,14 +132,11 @@ function foodCard(d){
   const fixed = savedFixed(), byW = savedByWeight(), byC = savedByCount();
   const saved = [...byW, ...byC, ...fixed];
   const sc = S.scaleId ? DB.savedMeals[S.scaleId] : null;
-  const grp = (label, list) => list.length ? `<optgroup label="${label}">${list.map(m=>
-    `<option value="${m.id}"${m.id===S.scaleId?" selected":""}>${esc(m.name)} — ${m.cal} cal · ${m.protein}g${m.per?" "+basisTxt(m):""}</option>`).join("")}</optgroup>` : "";
   return `<div class="card"><h2>Food ${isCheat?'<span class="badge" style="color:var(--cheat);border-color:#5a3f8f">cheat day — restaurant dinner planned</span>':''}</h2>
     ${saved.length?`<label class="fl" style="margin-top:0">Saved food — fills the form below, nothing is logged until you press Add</label>
-    <select id="foodSel" onchange="pickFood(this.value)">
-      <option value="">Choose a saved food…</option>
-      ${grp("By weight", byW)}${grp("By count", byC)}${grp("Fixed servings", fixed)}
-    </select>`:""}
+    ${saved.length>6?`<input id="foodFind" value="${esc(S.foodQ)}" placeholder="Search foods…" oninput="filterFoods(this.value)"
+      autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="search" style="margin-bottom:6px">`:""}
+    <select id="foodSel" onchange="pickFood(this.value)">${foodOptions(S.foodQ)}</select>`:""}
     ${sc?`<div id="scaleBox" class="mealgroup" style="margin-top:8px">
       <label class="fl" style="margin-top:8px">${esc(sc.name)} — ${amountWord(sc)}</label>
       <div class="row">
@@ -784,13 +781,39 @@ export function fillScaled(id){
   if (el){ el.value = ""; el.focus(); }      // still inside the tap, so iOS opens the keypad
   setForm(m.name, "", "");
 }
+/* The picker's options, filtered by a plain substring on the name. Kept separate from the card
+   so typing can swap just the <select>'s contents: re-rendering the card would rebuild the
+   search box too and drop focus after the first keystroke. */
+function foodOptions(q){
+  const needle = (q||"").trim().toLowerCase();
+  const hit = m => !needle || m.name.toLowerCase().includes(needle);
+  const grp = (label, list) => {
+    const f = list.filter(hit);
+    return f.length ? `<optgroup label="${label}">${f.map(m=>
+      `<option value="${m.id}"${m.id===S.scaleId?" selected":""}>${esc(m.name)} — ${m.cal} cal · ${m.protein}g${m.per?" "+basisTxt(m):""}</option>`).join("")}</optgroup>` : "";
+  };
+  const body = grp("By weight", savedByWeight()) + grp("By count", savedByCount()) + grp("Fixed servings", savedFixed());
+  const n = (body.match(/<option /g)||[]).length;
+  const head = !body ? "No food matches that"
+             : needle ? `${n} match${n===1?"":"es"} — choose one…`
+             : "Choose a saved food…";
+  return `<option value="">${head}</option>${body}`;
+}
+export function filterFoods(q){
+  S.foodQ = q;
+  const sel = document.getElementById("foodSel");
+  if (sel) sel.innerHTML = foodOptions(q);
+}
 // scalable foods open the amount field; fixed servings fill straight away and free the picker
 export function pickFood(id){
   if (!id){ if (S.scaleId) cancelScale(); return; }
   const m = DB.savedMeals[id]; if(!m) return;
-  if (m.per) { fillScaled(id); return; }
+  S.foodQ = "";                              // a pick ends the search, so the next one starts clean
+  if (m.per) { fillScaled(id); return; }     // renders, which redraws the cleared search box
   fillSaved(id);
-  const sel = document.getElementById("foodSel"); if (sel) sel.value = "";
+  const f = document.getElementById("foodFind"); if (f) f.value = "";
+  const sel = document.getElementById("foodSel");
+  if (sel){ sel.innerHTML = foodOptions(""); sel.value = ""; }
 }
 export function scaleType(){
   const m = S.scaleId && DB.savedMeals[S.scaleId]; if(!m) return;
