@@ -1,6 +1,6 @@
 import { CFG } from "./config.js";
 import { DB, Store } from "./store.js";
-import { today, dow, epley } from "./util.js";
+import { today, dow, epley, shiftD, parseD } from "./util.js";
 
 /* ---------- program ----------
    CFG is the program as shipped; DB.plan holds Plan-tab edits on top of it. A shipped exercise
@@ -150,10 +150,32 @@ export function adherence(days){
    Today is never "missed" — the day isn't over. Making a session up later greens up the day it
    actually happened on and still counts toward adherence, but the skipped day stays red: it is
    a record of what you did that day. */
+/* ---------- rescheduling ----------
+   A session can be loaded onto another day two ways. A make-up leaves its own day missed —
+   you did skip it, you just recovered the work. A move says the day was rescheduled on
+   purpose, so DB.moved stamps the vacated day and it stops counting against you. */
+
+// the date this session would normally fall on, in the same Mon–Sun week as `host`
+export function homeDateFor(sid, host){
+  const back = (dow(host) + 6) % 7;                       // Monday of host's week
+  const mon = shiftD(host, -back);
+  const split = programSplit();
+  const cands = Object.keys(split).filter(k => split[k] === sid)
+    .map(k => shiftD(mon, (+k + 6) % 7))                  // weekday index → date in that week
+    .filter(x => x !== host);
+  if (!cands.length) return null;
+  // nearest to the host day, later preferred on a tie
+  const dist = x => Math.abs(Math.round((parseD(x) - parseD(host)) / 864e5));
+  return cands.sort((a,b) => dist(a) - dist(b) || (a < b ? 1 : -1))[0];
+}
+// { "2026-10-08": { legs: "2026-10-07" } } — vacated date → session → where it went
+export const movedTo = (d, sid) => (DB.moved[d] || {})[sid] || null;
+
 export function workoutDayState(d){
   if (d > today()) return "future";
   const sid = programSplit()[dow(d)], own = sessions(d)[sid];
-  const prescribed = own && own.type !== "rest";
+  // a session moved off this day isn't prescribed here any more, so the day can't fall short of it
+  const prescribed = own && own.type !== "rest" && !movedTo(d, sid);
   if (completedOn(d).length) return "done";
   // "partial" means you fell short of a prescription, so it needs one to exist. Training on a
   // rest day is extra, not a shortfall — a makeup done that day still greens it via the stamp.

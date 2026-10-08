@@ -2,7 +2,7 @@ import { CFG, MEAL_LABELS } from "./config.js";
 import { DB, Store, DOC_KEYS } from "./store.js";
 import { today, parseD, dstr, dow, fmtShort, fmtLong, fmtTime, esc, epley, lastNDays, toast, num, numOrNull } from "./util.js";
 import { dayTotals, blocks, newBlock, attachBlock, loggedSets, daySetCount, blockHasContent, pruneEmptyBlocks,
-         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets, sessions, programSplit, planEdited, refreshCompletion, backfillCompletion } from "./data.js";
+         allExercises, allLoggedExercises, exDef, isBodyweight, exPrescription, exHistory, readyToProgress, bestE1RM, suggestedWeight, suggestedReps, adherence, workoutDayState, targets, sessions, programSplit, planEdited, refreshCompletion, backfillCompletion, homeDateFor, movedTo } from "./data.js";
 import { lineChart, barChart } from "./charts.js";
 
 /* ---------- ui state ---------- */
@@ -239,30 +239,41 @@ function workoutCard(d){
   const s = prog[sid];
   const arr = blocks(d);
   const makeup = (DB.makeup[d]||[]).filter(m=>prog[m]);
-  const anyLiftShown = s.type==="lift" || makeup.some(m=>prog[m].type==="lift");
-  const names = [s.type!=="rest"?s.name:null, ...makeup.map(m=>prog[m].name)].filter(Boolean);
+  const goneTo = movedTo(d, sid);                 // this day's own session was rescheduled elsewhere
+  const own = s.type!=="rest" && !goneTo ? s : null;
+  const anyLiftShown = (own&&own.type==="lift") || makeup.some(m=>prog[m].type==="lift");
+  const names = [own?own.name:null, ...makeup.map(m=>prog[m].name)].filter(Boolean);
   let html = `<div class="card"><h2>Workout${names.length?` — ${esc(names.join(" + "))}`:""}</h2>`;
-  if (s.type==="rest" && !makeup.length) html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
+  if (goneTo) html += `<div class="muted" style="margin-bottom:6px">${esc(s.name)} moved to ${fmtLong(goneTo)} — this day doesn't count as missed.
+    <a href="#" style="color:var(--accent)" onclick="undoMove('${sid}');return false">put it back</a></div>`;
+  else if (s.type==="rest" && !makeup.length) html += `<div class="muted" style="margin-bottom:6px">Rest day per the program — but log anything you did anyway.</div>`;
 
-  const allEx = [...(s.exercises||[]), ...makeup.flatMap(m=>prog[m].exercises||[])];
+  const allEx = [...((own&&own.exercises)||[]), ...makeup.flatMap(m=>prog[m].exercises||[])];
   html += musclesSummary(allEx);
-  html += sessionExercisesHtml(d, s);
+  if (own) html += sessionExercisesHtml(d, own);
   // make-up sessions loaded onto this day
   makeup.forEach(m=>{
     const ms = prog[m];
-    const mday=sessionDays(m);
-    html += `<h3 style="display:flex;justify-content:space-between;align-items:center">Made up: ${esc(ms.name)}${mday?` · ${mday}`:""}
+    const home = homeDateFor(m, d);
+    const wasMoved = home && movedTo(home, m) === d;
+    const mday = wasMoved ? `from ${fmtShort(home)}` : sessionDays(m);
+    html += `<h3 style="display:flex;justify-content:space-between;align-items:center">${wasMoved?"Moved":"Made up"}: ${esc(ms.name)}${mday?` · ${mday}`:""}
       <a href="#" class="muted" style="color:var(--faint);font-size:12px" onclick="removeMakeup('${m}');return false">remove</a></h3>`;
     html += sessionExercisesHtml(d, ms);
   });
   // control to load a missed session's reference list onto this day
   const loadable = Object.entries(prog).filter(([id,ss])=>ss.type!=="rest" && id!==sid && !makeup.includes(id));
+  const grid = (fn, sub) => `<div class="mealgrid">${loadable.map(([id,ss])=>{
+      const t = sub(id);
+      return `<button class="mealbtn" onclick="${fn}('${id}')"><div class="mn">${esc(ss.name)}</div>${t?`<div class="mm">${esc(t)}</div>`:""}</button>`;
+    }).join("")}</div>`;
   html += `<details class="cust" style="margin-top:10px"><summary>+ Make up a missed session</summary>
-    <div class="muted" style="margin:4px 0 6px">Loads another day's exercise list here so you can log it with the same UI. Doesn't move your schedule.</div>
-    <div class="mealgrid">${loadable.map(([id,ss])=>{
-      const day=sessionDays(id);
-      return `<button class="mealbtn" onclick="addMakeup('${id}')"><div class="mn">${esc(ss.name)}</div>${day?`<div class="mm">${day}</div>`:""}</button>`;
-    }).join("")}</div>
+    <div class="muted" style="margin:4px 0 6px">For work you skipped. Loads its exercise list here; the day you missed stays missed.</div>
+    ${grid("addMakeup", id=>sessionDays(id))}
+  </details>`;
+  html += `<details class="cust" style="margin-top:6px"><summary>+ Move a session here</summary>
+    <div class="muted" style="margin:4px 0 6px">For a swap. Same thing, but its own day is freed up so it won't go red.</div>
+    ${grid("moveSession", id=>{ const h=homeDateFor(id, d); return h?`frees ${fmtLong(h)}`:sessionDays(id); })}
   </details>`;
 
   // ---- add exercise: pick Run or a lift; inputs appear per type ----
@@ -390,10 +401,40 @@ export function addMakeup(sid){
   refreshCompletion(S.selDate);
   Store.save(); render(); toast(`Loaded ${sessions()[sid].name}`);
 }
+// a move is a make-up plus a stamp on the day it came from, so that day stops reading as missed
+export function moveSession(sid){
+  const home = homeDateFor(sid, S.selDate);
+  if (home){ (DB.moved[home] = DB.moved[home] || {})[sid] = S.selDate; }
+  const arr = DB.makeup[S.selDate] = DB.makeup[S.selDate] || [];
+  if(!arr.includes(sid)) arr.push(sid);
+  refreshCompletion(S.selDate);
+  Store.save(); render();
+  toast(`Moved ${sessions()[sid].name}${home?` off ${fmtShort(home)}`:""}`);
+}
+function clearMove(sid, host){
+  const home = homeDateFor(sid, host);
+  if (home && DB.moved[home] && DB.moved[home][sid] === host){
+    delete DB.moved[home][sid];
+    if (!Object.keys(DB.moved[home]).length) delete DB.moved[home];
+  }
+}
+// from the vacated day: send the session back to where it belongs
+export function undoMove(sid){
+  const host = movedTo(S.selDate, sid);
+  delete DB.moved[S.selDate][sid];
+  if (!Object.keys(DB.moved[S.selDate]).length) delete DB.moved[S.selDate];
+  if (host){
+    const arr = DB.makeup[host];
+    if (arr){ const i = arr.indexOf(sid); if(i>=0) arr.splice(i,1); if(!arr.length) delete DB.makeup[host]; }
+    refreshCompletion(host);
+  }
+  refreshCompletion(S.selDate); Store.save(); render();
+}
 export function removeMakeup(sid){
   const arr = DB.makeup[S.selDate]; if(!arr) return;
   const i = arr.indexOf(sid); if(i>=0) arr.splice(i,1);
   if(!arr.length) delete DB.makeup[S.selDate];
+  clearMove(sid, S.selDate);              // if it got here by a move, un-free its own day too
   refreshCompletion(S.selDate); Store.save(); render();
 }
 export function startNewWorkout(){ S._forceNew=true; toast("Next set starts a new workout"); render(); }
