@@ -18,7 +18,6 @@ export const numOrNull = v => {
   const n = parseFloat(t);
   return isFinite(n) && n >= 0 ? n : null;
 };
-export const shiftD = (s, n) => { const d = parseD(s); d.setDate(d.getDate()+n); return dstr(d); };
 export const lastNDays = n => { const out=[],d=new Date(); for(let i=n-1;i>=0;i--){const x=new Date(d); x.setDate(d.getDate()-i); out.push(dstr(x));} return out; };
 export function toast(msg){
   const t=document.getElementById("toast"); if(!t) return;

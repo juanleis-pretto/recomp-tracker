@@ -52,7 +52,7 @@ Object.assign(window, {
   shiftMonth:V.shiftMonth, openDay:V.openDay, setCalMode:V.setCalMode,
   selEx:V.selEx, addSet:V.addSet, startNewWorkout:V.startNewWorkout, delLastSet:V.delLastSet,
   addActivity:V.addActivity, delActivity:V.delActivity,
-  addMakeup:V.addMakeup, moveSession:V.moveSession, undoMove:V.undoMove, removeMakeup:V.removeMakeup,
+  addMakeup:V.addMakeup, removeMakeup:V.removeMakeup,
   saveRun:V.saveRun, toggleDone:V.toggleDone, saveBody:V.saveBody,
   pickLift:V.pickLift, renameEx:V.renameEx,
   saveTargets:V.saveTargets, resetTargets:V.resetTargets,
