@@ -682,21 +682,20 @@ export function viewTrends(){
     ${barChart(days,cal,{target:T.cal,floorMode:"above",cheatDow:CFG.cheatDay})}
     <div class="muted">Purple bars are Fridays — cheat meal is part of the plan, not a failure.</div></div>`;
   const adh = adherence(days.filter(d=>d<=today()));
-  // the averages count only days you marked fully logged. A day with two of four meals entered
-  // isn't a 600-calorie day, it's an unfinished one, and counting it dragged the mean down.
-  let floorDays=0, calSum=0, calN=0, fullyLoggedDays=0;
+  // every day marked fully logged, and only those. That box is ticked by hand, so it's the
+  // accurate set — a day with two of four meals entered isn't a 600-calorie day, it's an
+  // unfinished one, while a marked day that came to zero is a real zero.
+  let floorDays=0, calSum=0, doneDays=0;
   for (const d of days){
     if (!DB.mealsDone[d]) continue;
-    fullyLoggedDays++;
-    if (!(DB.meals[d] && DB.meals[d].length)) continue;   // marked done with nothing entered: no intake to average
-    const t=dayTotals(d); calSum+=t.cal; calN++; if(t.protein>=T.proteinFloor) floorDays++;
+    const t=dayTotals(d); calSum+=t.cal; doneDays++; if(t.protein>=T.proteinFloor) floorDays++;
   }
   html+=`<div class="card"><h2>Adherence — last 30 days</h2><div class="stat">
     <div class="s"><div class="v">${adh.got}/${adh.need}</div><div class="k">workouts completed vs prescribed</div></div>
-    <div class="s"><div class="v">${floorDays}/${calN||0}</div><div class="k">fully logged days hitting ${T.proteinFloor}g protein floor</div></div>
-    <div class="s"><div class="v">${calN?Math.round(calSum/calN):"—"}</div><div class="k">avg calories on fully logged days (target ${T.cal})</div></div>
-    <div class="s"><div class="v">${fullyLoggedDays}</div><div class="k">days with food fully logged</div></div>
-    <div class="s"><div class="v">${days.length-fullyLoggedDays}</div><div class="k">days without all meals logged</div></div>
+    <div class="s"><div class="v">${floorDays}/${doneDays}</div><div class="k">fully logged days hitting ${T.proteinFloor}g protein floor</div></div>
+    <div class="s"><div class="v">${doneDays?Math.round(calSum/doneDays):"—"}</div><div class="k">avg calories on fully logged days (target ${T.cal})</div></div>
+    <div class="s"><div class="v">${doneDays}</div><div class="k">days with food fully logged</div></div>
+    <div class="s"><div class="v">${days.length-doneDays}</div><div class="k">days without all meals logged</div></div>
   </div></div>`;
   return html;
 }
